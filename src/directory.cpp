@@ -41,7 +41,7 @@ void Directory::Initialize(fuse_ino_t ino, mode_t mode, nlink_t nlink, gid_t gid
  */
 fuse_ino_t Directory::ChildInodeNumberWithName(const string &name) {
     if (m_children.find(name) == m_children.end()) {
-        return -1;
+        return INO_NOTFOUND;
     }
     
     return m_children[name];

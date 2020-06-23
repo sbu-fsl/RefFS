@@ -28,6 +28,7 @@
 #include "special_inode.hpp"
 #include "symlink.hpp"
 #include "fuse_cpp_ramfs.hpp"
+#include "util.hpp"
 
 using namespace std;
 
@@ -142,11 +143,13 @@ void FuseRamFs::FuseInit(void *userdata, struct fuse_conn_info *conn)
     inode_p = new SpecialInode(SPECIAL_INODE_TYPE_NO_BLOCK);
     RegisterInode(inode_p, 0, 0, gid, uid);
     
-    inode_p = new Directory();
+    Directory *root = new Directory();
     
     // I think that that the root directory should have a hardlink count of 3.
     // This is what I believe I've surmised from reading around.
-    RegisterInode(inode_p, S_IFDIR | 0777, 3, gid, uid);
+    fuse_ino_t rootno = RegisterInode(root, S_IFDIR | 0777, 3, gid, uid);
+    root->AddChild(string("."), rootno);
+    root->AddChild(string(".."), rootno);
     
     cout << "init" << endl;
 }
@@ -376,7 +379,7 @@ void FuseRamFs::FuseReadDir(fuse_req_t req, fuse_ino_t ino, size_t size,
     char *buf = (char *) malloc(bufSize);
     if (buf == NULL) {
         cerr << "*** fatal error: cannot allocate memory" << endl;
-        abort();
+        fuse_reply_err(req, ENOMEM);
     }
 
     // We'll assume that off is 0 when we start. This means that
@@ -386,27 +389,16 @@ void FuseRamFs::FuseReadDir(fuse_req_t req, fuse_ino_t ino, size_t size,
     if (childIterator == NULL) {
         childIterator = new map<string, fuse_ino_t>::const_iterator(dir->Children().begin());
         cout << " with new iterator at " << (void *) childIterator << " pointing to " << (void *) &(**childIterator);
-        
-        // Add . and .. - We'll assume that there's enough space in the buffer
-        // to do this.
-        stbuf.st_ino = ino;
-        bytesAdded += fuse_add_direntry(req,
-                                        buf + bytesAdded,
-                                        bufSize - bytesAdded,
-                                        ".",
-                                        &stbuf,
-                                        (off_t) childIterator);
-        bytesAdded += fuse_add_direntry(req,
-                                        buf + bytesAdded,
-                                        bufSize - bytesAdded,
-                                        "..",
-                                        &stbuf,
-                                        (off_t) childIterator);
-        entriesAdded +=2;
     }
     
     while (entriesAdded < FuseRamFs::kReadDirEntriesPerResponse &&
            *childIterator != dir->Children().end()) {
+        fuse_ino_t child_ino = (*childIterator)->second;
+        Inode *childInode = Inodes[child_ino];
+        if (childInode == nullptr)
+            continue;
+
+        stbuf = childInode->GetAttr();
         stbuf.st_ino = (*childIterator)->second;
         
         // TODO: We don't look at sticky bits, etc. Revisit this in the future.
@@ -606,6 +598,12 @@ void FuseRamFs::FuseMkdir(fuse_req_t req, fuse_ino_t parent, const char *name, m
         fuse_reply_err(req, ENOTDIR);
         return;
     }
+
+    /* Avoid making an existing directory */
+    if (parentDir_p->ChildInodeNumberWithName(name) != INO_NOTFOUND) {
+        fuse_reply_err(req, EEXIST);
+        return;
+    }
     
     // TODO: Handle permissions on dirs. You can't just create anything you please!:
     //    else if ((fi->flags & 3) != O_RDONLY)
@@ -613,17 +611,18 @@ void FuseRamFs::FuseMkdir(fuse_req_t req, fuse_ino_t parent, const char *name, m
     
     const struct fuse_ctx* ctx_p = fuse_req_ctx(req);
     
-    
     Directory *dir_p = new Directory();
-    fuse_ino_t ino = RegisterInode(dir_p, mode, 2, ctx_p->gid, ctx_p->uid);
-    
-    // Insert the inode into the directory. TODO: What if it already exists?
-    parentDir_p->UpdateChild(string(name), ino);
-    
-    // Update the number of hardlinks in the parent dir
+    fuse_ino_t ino = RegisterInode(dir_p, mode | S_IFDIR, 2, ctx_p->gid, ctx_p->uid);
+
+    // TODO: Handle error if adding things failed: Needs to rollback
+    /* Initialize the new directory: Add '.' and '..' */
+    dir_p->AddChild(string("."), ino);
+    dir_p->AddChild(string(".."), parent);
     parentDir_p->AddHardLink();
+
+    // Insert the inode into the directory. TODO: What if it already exists?
+    parentDir_p->AddChild(string(name), ino);
     
-    // TODO: Is reply_entry only for directories? What about files?
     cout << "mkdir for " << ino << ". nlookup++" << endl;
     dir_p->ReplyEntry(req);
 }

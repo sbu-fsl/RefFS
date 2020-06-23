@@ -46,6 +46,7 @@ public:
     void RemoveHardLink() { m_fuseEntryParam.attr.st_nlink--; }
     bool HasNoLinks() { return m_fuseEntryParam.attr.st_nlink == 0; }
     size_t UsedBlocks() { return m_fuseEntryParam.attr.st_blocks; }
+    struct stat GetAttr() { return m_fuseEntryParam.attr; }
     
     bool Forgotten() { return m_nlookup == 0; }
 };

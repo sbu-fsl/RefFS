@@ -5,6 +5,10 @@
 #ifndef util_hpp
 #define util_hpp
 
+#include <sys/types.h>
+
+#define INO_NOTFOUND    (fuse_ino_t) -1
+
 // TODO: This looks like it was required before. Perhaps Sierra now includes it.
 //#ifdef __MACH__
 //#define CLOCK_REALTIME 0
