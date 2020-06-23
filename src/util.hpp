@@ -12,4 +12,12 @@
 //int clock_gettime(int /*clk_id*/, struct timespec* t);
 //#endif
 
+static inline size_t round_up(size_t value, size_t unit) {
+        return (value + unit - 1) / unit;
+}
+
+static inline size_t get_nblocks(size_t size, size_t blocksize) {
+        return round_up(size, blocksize) / blocksize;
+}
+
 #endif /* util_hpp */
