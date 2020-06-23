@@ -188,12 +188,12 @@ void FuseRamFs::FuseLookup(fuse_req_t req, fuse_ino_t parent, const char *name)
     Directory *dir = dynamic_cast<Directory *>(parentInode);
     if (dir == NULL) {
         // The parent wasn't a directory. It can't have any children.
-        fuse_reply_err(req, ENOENT);
+        fuse_reply_err(req, ENOTDIR);
         return;
     }
     
     fuse_ino_t ino = dir->ChildInodeNumberWithName(string(name));
-    if (ino == -1) {
+    if (ino == INO_NOTFOUND) {
         fuse_reply_err(req, ENOENT);
         return;
     }
@@ -643,7 +643,7 @@ void FuseRamFs::FuseUnlink(fuse_req_t req, fuse_ino_t parent, const char *name)
     // You can only delete something inside a directory
     Directory *parentDir_p = dynamic_cast<Directory *>(parentInode);
     if (parentDir_p == NULL) {
-        fuse_reply_err(req, EISDIR);
+        fuse_reply_err(req, ENOTDIR);
         return;
     }
     
@@ -684,7 +684,7 @@ void FuseRamFs::FuseRmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
     // You can only delete something inside a directory
     Directory *parentDir_p = dynamic_cast<Directory *>(parentInode);
     if (parentDir_p == NULL) {
-        fuse_reply_err(req, EISDIR);
+        fuse_reply_err(req, ENOTDIR);
         return;
     }
     
@@ -706,7 +706,7 @@ void FuseRamFs::FuseRmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
     Directory *dir_p = dynamic_cast<Directory *>(inode_p);
     if (dir_p == NULL) {
         // Someone tried to rmdir on something that wasn't a directory.
-        fuse_reply_err(req, EISDIR);
+        fuse_reply_err(req, ENOTDIR);
         return;
     }
     
@@ -824,7 +824,7 @@ void FuseRamFs::FuseRename(fuse_req_t req, fuse_ino_t parent, const char *name, 
     // You can only rename something inside a directory
     Directory *parentDir = dynamic_cast<Directory *>(parentInode);
     if (parentDir == NULL) {
-        fuse_reply_err(req, EISDIR);
+        fuse_reply_err(req, ENOTDIR);
         return;
     }
     
@@ -851,7 +851,7 @@ void FuseRamFs::FuseRename(fuse_req_t req, fuse_ino_t parent, const char *name, 
     // ever give us a parent that isn't a dir? Test this.
     Directory *newParentDir = dynamic_cast<Directory *>(newParentInode);
     if (newParentDir == NULL) {
-        fuse_reply_err(req, EISDIR);
+        fuse_reply_err(req, ENOTDIR);
         return;
     }
     
@@ -891,7 +891,7 @@ void FuseRamFs::FuseLink(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent, c
     // ever give us a parent that isn't a dir? Test this.
     Directory *newParentDir_p = dynamic_cast<Directory *>(inode_p);
     if (newParentDir_p == NULL) {
-        fuse_reply_err(req, EISDIR);
+        fuse_reply_err(req, ENOTDIR);
         return;
     }
     
@@ -934,7 +934,7 @@ void FuseRamFs::FuseSymlink(fuse_req_t req, const char *link, fuse_ino_t parent,
     // You can only make something inside a directory
     Directory *dir = dynamic_cast<Directory *>(parent_p);
     if (dir == NULL) {
-        fuse_reply_err(req, EISDIR);
+        fuse_reply_err(req, ENOTDIR);
         return;
     }
     
@@ -968,7 +968,7 @@ void FuseRamFs::FuseReadLink(fuse_req_t req, fuse_ino_t ino)
     // You can only readlink on a symlink
     SymLink *link_p = dynamic_cast<SymLink *>(inode_p);
     if (link_p == NULL) {
-        fuse_reply_err(req, EPERM);
+        fuse_reply_err(req, EINVAL);
         return;
     }
     
@@ -1095,7 +1095,7 @@ void FuseRamFs::FuseCreate(fuse_req_t req, fuse_ino_t parent, const char *name, 
     Directory *parentDir_p = dynamic_cast<Directory *>(parent_p);
     if (parentDir_p == NULL) {
         // The parent wasn't a directory. It can't have any children.
-        fuse_reply_err(req, ENOENT);
+        fuse_reply_err(req, ENOTDIR);
         return;
     }
     
