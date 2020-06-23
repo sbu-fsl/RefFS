@@ -2,6 +2,10 @@
  *  @copyright 2016 Peter Watkins. All rights reserved.
  */
 
+#if !defined(FUSE_USE_VERSION) || FUSE_USE_VERSION < 30
+#define FUSE_USE_VERSION 30
+#endif
+
 #include <vector>
 #include <queue>
 #include <map>
@@ -598,8 +602,8 @@ void FuseRamFs::FuseMkdir(fuse_req_t req, fuse_ino_t parent, const char *name, m
     
     // You can only make something inside a directory
     Directory *parentDir_p = dynamic_cast<Directory *>(parentInode);
-    if (parentDir_p == NULL) {
-        fuse_reply_err(req, EISDIR);
+    if (parentDir_p == nullptr) {
+        fuse_reply_err(req, ENOTDIR);
         return;
     }
     
