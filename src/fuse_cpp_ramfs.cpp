@@ -797,8 +797,7 @@ void FuseRamFs::FuseForget(fuse_req_t req, fuse_ino_t ino, unsigned long nlookup
 {
     Inode *inode_p = Inodes[ino];
     
-    if (inode_p == nullptr || inode_p->HasNoLinks()) {
-        fuse_reply_err(req, ENOENT);
+    if (inode_p == nullptr) {
         return;
     }
 
@@ -809,15 +808,16 @@ void FuseRamFs::FuseForget(fuse_req_t req, fuse_ino_t ino, unsigned long nlookup
     {
         if (inode_p->HasNoLinks())
         {
-            // Add the inode to the deleted list. Anything in this list may be reclaimed.
+            // Let's just delete this inode and free memory.
+            size_t blocks_freed = inode_p->UsedBlocks();
+            delete inode_p;
+            Inodes[ino] = nullptr;
+            FuseRamFs::UpdateUsedInodes(-blocks_freed);
+
+            // Insert the inode number to DeletedInodes queue for slot reclaim
             DeletedInodes.push(ino);
-            if (DeletedInodes.size() > FuseRamFs::kInodeReclamationThreshold) {
-                m_reclaimingInodes = true;
-            }
             
-            // At this point, directory entries will still point to this inode. This is
-            // OK since we'll update those entries as soon as someone reads the directory.
-            cout << "Added " << ino << " to deleted list" << endl;
+            cout << "Freed inode " << ino << endl;
         }
         else
         {
@@ -1266,27 +1266,20 @@ void FuseRamFs::FuseGetLock(fuse_req_t req, fuse_ino_t ino, struct fuse_file_inf
 
 fuse_ino_t FuseRamFs::RegisterInode(Inode *inode_p, mode_t mode, nlink_t nlink, gid_t gid, uid_t uid)
 {
-    // Stop reclaiming inodes if there are no more to reclaim.
-    if (DeletedInodes.size() == 0) {
-        m_reclaimingInodes = false;
-    }
-    
     // Either re-use a deleted inode or push one back depending on whether we're reclaiming inodes now or
     // not.
     fuse_ino_t ino;
-    if (m_reclaimingInodes) {
-        ino = DeletedInodes.front();
-        DeletedInodes.pop();
-        Inode *del_p = Inodes[ino];
-        FuseRamFs::UpdateUsedBlocks(-(del_p->UsedBlocks()));
-        Inodes[ino] = inode_p;
-        delete del_p;
-    } else {
+    if (DeletedInodes.empty()) {
         Inodes.push_back(inode_p);
         ino = Inodes.size() - 1;
         FuseRamFs::UpdateUsedInodes(1);
+    } else {
+        ino = DeletedInodes.front();
+        DeletedInodes.pop();
+        Inodes[ino] = inode_p;
     }
 
     inode_p->Initialize(ino, mode, nlink, gid, uid);
+    FuseRamFs::UpdateUsedBlocks(inode_p->UsedBlocks());
     return ino;
 }
