@@ -266,6 +266,7 @@ void Inode::Initialize(fuse_ino_t ino, mode_t mode, nlink_t nlink, gid_t gid, ui
     // TODO: Still not sure if I should use m_fuseEntryParam = {}
     memset(&m_fuseEntryParam, 0, sizeof(m_fuseEntryParam));
     m_fuseEntryParam.ino = ino;
+    m_fuseEntryParam.attr.st_ino = ino;
     m_fuseEntryParam.attr_timeout = 1.0;
     m_fuseEntryParam.entry_timeout = 1.0;
     m_fuseEntryParam.attr.st_mode = mode;
