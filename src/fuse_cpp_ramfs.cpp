@@ -614,7 +614,7 @@ void FuseRamFs::FuseMknod(fuse_req_t req, fuse_ino_t parent, const char *name,
     fuse_ino_t ino = RegisterInode(inode_p, mode, nlink, ctx_p->gid, ctx_p->uid);
     
     // Insert the inode into the directory. TODO: What if it already exists?
-    parentDir_p->UpdateChild(string(name), ino);
+    parentDir_p->AddChild(string(name), ino);
     
     // TODO: Is reply_entry only for directories? What about files?
     cout << "mknod for " << ino << ". nlookup++" << endl;
@@ -704,7 +704,7 @@ void FuseRamFs::FuseUnlink(fuse_req_t req, fuse_ino_t parent, const char *name)
     }
     
     // Point the name to the deleted block
-    parentDir_p->UpdateChild(string(name), 0);
+    parentDir_p->RemoveChild(string(name));
     
     Inode *inode_p = Inodes[ino];
     // TODO: Any way we can fail here? What if the inode doesn't exist? That probably indicates
@@ -749,6 +749,12 @@ void FuseRamFs::FuseRmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
         return;
     }
     
+    /* Prevent removing '.': raise error if ino == parent */
+    if (ino == parent) {
+        fuse_reply_err(req, EINVAL);
+        return;
+    }
+
     Inode *inode_p = Inodes[ino];
     // TODO: Any way we can fail here? What if the inode doesn't exist? That probably indicates
     // a problem that happened earlier.
@@ -763,17 +769,27 @@ void FuseRamFs::FuseRmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
         fuse_reply_err(req, ENOTDIR);
         return;
     }
+
+    /* Cannot remove if the directory is not empty */
+    /* 2 is a base size: each dir contains at least '.' and '..' */
+    /* This also prevents removing '..' */
+    if (dir_p->Children().size() > 2) {
+        fuse_reply_err(req, ENOTEMPTY);
+        return;
+    }
     
+    parentDir_p->RemoveChild(name);
     // Update the number of hardlinks in the parent dir
     parentDir_p->RemoveHardLink();
     
     // Remove the hard links to this dir so it can be cleaned up later
     // TODO: What if there's a real hardlink to this dir? Hardlinks to dirs allowed?
+    // NOTE: No, hardlinks to dirs are not allowed. 
     while (!dir_p->HasNoLinks()) {
         dir_p->RemoveHardLink();
     }
     
-    // Reply with no error. TODO: Where is ESUCCESS?
+    // Reply with no error. 
     fuse_reply_err(req, 0);
 }
 
@@ -886,6 +902,7 @@ void FuseRamFs::FuseRename(fuse_req_t req, fuse_ino_t parent, const char *name, 
     
     Inode *parentInode = Inodes[parent];
     
+    // Make sure it's not an already deleted inode
     if (parentInode == nullptr || parentInode->HasNoLinks()) {
         fuse_reply_err(req, ENOENT);
         return;
@@ -933,7 +950,7 @@ void FuseRamFs::FuseRename(fuse_req_t req, fuse_ino_t parent, const char *name, 
     // directory
     fuse_ino_t existingIno = newParentDir->ChildInodeNumberWithName(string(newname));
     // Type is unsigned so we have to explicitly check for largest value. TODO: Refactor please.
-    if (existingIno != -1 && existingIno > 0) {
+    if (existingIno != INO_NOTFOUND) {
         // There's already a child with that name. Replace it.
         // TODO: What about directories with the same name?
         Inode *existingInode_p = Inodes[parent];
@@ -996,7 +1013,7 @@ void FuseRamFs::FuseLink(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent, c
     }
     
     // Create the new name and point it to the inode.
-    newParentDir_p->UpdateChild(string(newname), ino);
+    newParentDir_p->AddChild(string(newname), ino);
     
     // Update the number of hardlinks in the target
     inode_p->AddHardLink();
@@ -1036,7 +1053,7 @@ void FuseRamFs::FuseSymlink(fuse_req_t req, const char *link, fuse_ino_t parent,
     fuse_ino_t ino = RegisterInode(inode_p, S_IFLNK | 0755, 1, ctx_p->gid, ctx_p->uid);
     
     // Insert the inode into the directory. TODO: What if it already exists?
-    dir->UpdateChild(string(name), ino);
+    dir->AddChild(string(name), ino);
     
     // TODO: Is reply_entry only for directories? What about files?
     cout << "symlink for " << ino << ". nlookup++" << endl;
@@ -1227,7 +1244,7 @@ void FuseRamFs::FuseCreate(fuse_req_t req, fuse_ino_t parent, const char *name, 
     fuse_ino_t ino = RegisterInode(inode_p, mode, 1, ctx_p->gid, ctx_p->uid);
     
     // Insert the inode into the directory. TODO: What if it already exists?
-    parentDir_p->UpdateChild(string(name), ino);
+    parentDir_p->AddChild(string(name), ino);
     
     cout << "create for " << ino << " with name " << name << " in " << parent << endl;
     inode_p->ReplyCreate(req, fi);
