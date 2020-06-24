@@ -198,8 +198,12 @@ void FuseRamFs::FuseLookup(fuse_req_t req, fuse_ino_t parent, const char *name)
         return;
     }
     
-    // TODO: What do we do if the inode was deleted?
     Inode *inode = Inodes[ino];
+    /* Return ENOENT if this inode has been deleted */
+    if (inode == nullptr || inode->HasNoLinks()) {
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
     
     cout << "lookup for " << ino << ". nlookup++" << endl;
     inode->ReplyEntry(req);
@@ -220,8 +224,12 @@ void FuseRamFs::FuseGetAttr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_inf
         fuse_reply_err(req, ENOENT);
     }
     
-    // TODO: What do we do if the inode was deleted?
     Inode *inode = Inodes[ino];
+    /* return enoent if this inode has been deleted */
+    if (inode == nullptr || inode->HasNoLinks()) {
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
     
     cout << "getattr for " << ino << endl;
     inode->ReplyAttr(req);
@@ -244,9 +252,13 @@ void FuseRamFs::FuseSetAttr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, i
         fuse_reply_err(req, ENOENT);
     }
     
-    // TODO: What do we do if the inode was deleted?
     Inode *inode = Inodes[ino];
-    
+    /* return enoent if this inode has been deleted */
+    if (inode == nullptr || inode->HasNoLinks()) {
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
+
     cout << "setattr for " << ino << endl;
     inode->ReplySetAttr(req, attr, to_set);
 }
@@ -266,7 +278,11 @@ void FuseRamFs::FuseOpenDir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_inf
     }
     
     Inode *inode = Inodes[ino];
-    
+    /* return enoent if this inode has been deleted */
+    if (inode == nullptr || inode->HasNoLinks()) {
+        fuse_reply_err(req, ENOENT);
+        return;
+    }   
     // You can't open a file with 'opendir'. Check for this.
     File *file = dynamic_cast<File *>(inode);
     if (file != NULL) {
@@ -298,7 +314,11 @@ void FuseRamFs::FuseReleaseDir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_
     }
     
     Inode *inode = Inodes[ino];
-    
+    /* return enoent if this inode has been deleted */
+    if (inode == nullptr || inode->HasNoLinks()) {
+        fuse_reply_err(req, ENOENT);
+        return;
+    }   
     // You can't close a file with 'closedir'. Check for this.
     File *file = dynamic_cast<File *>(inode);
     if (file != NULL) {
@@ -332,7 +352,7 @@ void FuseRamFs::FuseReadDir(fuse_req_t req, fuse_ino_t ino, size_t size,
     cout << "readdir for " << ino;
     
     size_t numInodes = Inodes.size();
-    // TODO: Node may also be deleted.
+    // TODO[resolved]: Node may also be deleted.
     if (ino >= numInodes) {
         fuse_reply_err(req, ENOENT);
         return;
@@ -341,6 +361,12 @@ void FuseRamFs::FuseReadDir(fuse_req_t req, fuse_ino_t ino, size_t size,
     map<string, fuse_ino_t>::const_iterator *childIterator = (map<string, fuse_ino_t>::const_iterator *) off;
     
     Inode *inode = Inodes[ino];
+    /* return ENOENT if this inode has been deleted */
+    if (inode == nullptr || inode->HasNoLinks()) {
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
+
     Directory *dir = dynamic_cast<Directory *>(inode);
     if (dir == NULL) {
         fuse_reply_err(req, ENOTDIR);
@@ -444,7 +470,12 @@ void FuseRamFs::FuseOpen(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *
     }
     
     Inode *inode = Inodes[ino];
-    
+    /* return ENOENT if this inode has been deleted */
+    if (inode == nullptr || inode->HasNoLinks()) {
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
+
     // You can't open a dir with 'open'. Check for this.
     Directory *dir = dynamic_cast<Directory *>(inode);
     if (dir != NULL) {
@@ -470,7 +501,12 @@ void FuseRamFs::FuseRelease(fuse_req_t req, fuse_ino_t ino, struct fuse_file_inf
     }
     
     Inode *inode_p = Inodes[ino];
-    
+    /* return ENOENT if this inode has been deleted */
+    if (inode_p == nullptr || inode_p->HasNoLinks()) {
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
+
     // You can't release a dir with 'close'. Check for this.
     Directory *dir = dynamic_cast<Directory *>(inode_p);
     if (dir != NULL) {
@@ -526,7 +562,12 @@ void FuseRamFs::FuseMknod(fuse_req_t req, fuse_ino_t parent, const char *name,
     }
     
     Inode *parentInode = Inodes[parent];
-    
+    /* return ENOENT if this inode has been deleted */
+    if (parentInode == nullptr || parentInode->HasNoLinks()) {
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
+
     // You can only make something inside a directory
     Directory *parentDir_p = dynamic_cast<Directory *>(parentInode);
     if (parentDir_p == NULL) {
@@ -632,14 +673,18 @@ void FuseRamFs::FuseUnlink(fuse_req_t req, fuse_ino_t parent, const char *name)
     cout << "unlink for " << name << " in " << parent << endl;
     
     size_t numInodes = Inodes.size();
-    // TODO: Node may also be deleted.
     if (parent >= numInodes) {
         fuse_reply_err(req, ENOENT);
         return;
     }
     
     Inode *parentInode = Inodes[parent];
-    
+    /* return ENOENT if this inode has been deleted */
+    if (parentInode == nullptr || parentInode->HasNoLinks()) {
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
+
     // You can only delete something inside a directory
     Directory *parentDir_p = dynamic_cast<Directory *>(parentInode);
     if (parentDir_p == NULL) {
@@ -680,7 +725,12 @@ void FuseRamFs::FuseRmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
     }
     
     Inode *parentInode = Inodes[parent];
-    
+    /* return ENOENT if this inode has been deleted */
+    if (parentInode == nullptr || parentInode->HasNoLinks()) {
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
+
     // You can only delete something inside a directory
     Directory *parentDir_p = dynamic_cast<Directory *>(parentInode);
     if (parentDir_p == NULL) {
@@ -702,7 +752,11 @@ void FuseRamFs::FuseRmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
     Inode *inode_p = Inodes[ino];
     // TODO: Any way we can fail here? What if the inode doesn't exist? That probably indicates
     // a problem that happened earlier.
-    
+    if (inode_p == nullptr || inode_p->HasNoLinks()) {
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
+
     Directory *dir_p = dynamic_cast<Directory *>(inode_p);
     if (dir_p == NULL) {
         // Someone tried to rmdir on something that wasn't a directory.
@@ -725,9 +779,13 @@ void FuseRamFs::FuseRmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
 
 void FuseRamFs::FuseForget(fuse_req_t req, fuse_ino_t ino, unsigned long nlookup)
 {
-    // TODO: What if the inode doesn't exist!?!?!?!
     Inode *inode_p = Inodes[ino];
     
+    if (inode_p == nullptr || inode_p->HasNoLinks()) {
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
+
     cout << "forget for " << ino << ". nlookup -= " << nlookup << endl;
     inode_p->Forget(req, nlookup);
     
@@ -759,7 +817,7 @@ void FuseRamFs::FuseWrite(fuse_req_t req, fuse_ino_t ino, const char *buf, size_
 {
     // TODO: Fuse seems to have problems writing with a null (buf) buffer.
     if (buf == NULL) {
-        fuse_reply_err(req, EPERM);
+        fuse_reply_err(req, EINVAL);
         return;
     }
     
@@ -769,8 +827,11 @@ void FuseRamFs::FuseWrite(fuse_req_t req, fuse_ino_t ino, const char *buf, size_
         return;
     }
     
-    Inode *inode_p = Inodes[ino];
-    
+    Inode *inode_p = Inodes[ino]; 
+    if (inode_p == nullptr || inode_p->HasNoLinks()) {
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
     // TODO: Handle info in fi.
 
     cout << "Write request for " << size << " bytes at " << off << " to " << ino << endl;
@@ -803,6 +864,10 @@ void FuseRamFs::FuseRead(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
     
     Inode *inode_p = Inodes[ino];
     
+    if (inode_p == nullptr || inode_p->HasNoLinks()) {
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
     // TODO: Handle info in fi.
     
     cout << "read for " << size << " at " << off << " from " << ino << endl;
@@ -821,6 +886,11 @@ void FuseRamFs::FuseRename(fuse_req_t req, fuse_ino_t parent, const char *name, 
     
     Inode *parentInode = Inodes[parent];
     
+    if (parentInode == nullptr || parentInode->HasNoLinks()) {
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
+
     // You can only rename something inside a directory
     Directory *parentDir = dynamic_cast<Directory *>(parentInode);
     if (parentDir == NULL) {
@@ -847,6 +917,10 @@ void FuseRamFs::FuseRename(fuse_req_t req, fuse_ino_t parent, const char *name, 
     
     Inode *newParentInode = Inodes[newparent];
     
+    if (newParentInode == nullptr || newParentInode->HasNoLinks()) {
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
     // The new parent must be a directory. TODO: Do we need this check? Will FUSE
     // ever give us a parent that isn't a dir? Test this.
     Directory *newParentDir = dynamic_cast<Directory *>(newParentInode);
@@ -887,6 +961,11 @@ void FuseRamFs::FuseLink(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent, c
     
     Inode *inode_p = Inodes[newparent];
     
+    if (inode_p == nullptr || inode_p->HasNoLinks()) {
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
+
     // The new parent must be a directory. TODO: Do we need this check? Will FUSE
     // ever give us a parent that isn't a dir? Test this.
     Directory *newParentDir_p = dynamic_cast<Directory *>(inode_p);
@@ -903,6 +982,10 @@ void FuseRamFs::FuseLink(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent, c
     
     inode_p = Inodes[ino];
     
+    if (inode_p == nullptr || inode_p->HasNoLinks()) {
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
     // Look for an existing child with the same name in the new parent
     // directory
     fuse_ino_t existingIno = newParentDir_p->ChildInodeNumberWithName(string(newname));
@@ -931,6 +1014,10 @@ void FuseRamFs::FuseSymlink(fuse_req_t req, const char *link, fuse_ino_t parent,
     
     Inode *parent_p = Inodes[parent];
     
+    if (parent_p == nullptr || parent_p->HasNoLinks()) {
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
     // You can only make something inside a directory
     Directory *dir = dynamic_cast<Directory *>(parent_p);
     if (dir == NULL) {
@@ -965,6 +1052,11 @@ void FuseRamFs::FuseReadLink(fuse_req_t req, fuse_ino_t ino)
     
     Inode *inode_p = Inodes[ino];
     
+    if (inode_p == nullptr || inode_p->HasNoLinks()) {
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
+
     // You can only readlink on a symlink
     SymLink *link_p = dynamic_cast<SymLink *>(inode_p);
     if (link_p == NULL) {
@@ -1013,6 +1105,11 @@ void FuseRamFs::FuseSetXAttr(fuse_req_t req, fuse_ino_t ino, const char *name, c
     
     Inode *inode_p = Inodes[ino];
     
+    if (inode_p == nullptr || inode_p->HasNoLinks()) {
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
+
 #ifndef __APPLE__
     uint32_t position = 0;
 #endif
@@ -1034,6 +1131,11 @@ void FuseRamFs::FuseGetXAttr(fuse_req_t req, fuse_ino_t ino, const char *name, s
     
     Inode *inode_p = Inodes[ino];
     
+    if (inode_p == nullptr || inode_p->HasNoLinks()) {
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
+
 #ifndef __APPLE__
     uint32_t position = 0;
 #endif
@@ -1051,6 +1153,11 @@ void FuseRamFs::FuseListXAttr(fuse_req_t req, fuse_ino_t ino, size_t size)
     
     Inode *inode_p = Inodes[ino];
 
+    if (inode_p == nullptr || inode_p->HasNoLinks()) {
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
+
     cout << "listxattr for " << ino << endl;
     inode_p->ListXAttrAndReply(req, size);
 }
@@ -1064,6 +1171,10 @@ void FuseRamFs::FuseRemoveXAttr(fuse_req_t req, fuse_ino_t ino, const char *name
     
     Inode *inode_p = Inodes[ino];
     
+    if (inode_p == nullptr || inode_p->HasNoLinks()) {
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
     cout << "removexattr for " << ino << endl;
     inode_p->RemoveXAttrAndReply(req, string(name));
 }
@@ -1077,6 +1188,10 @@ void FuseRamFs::FuseAccess(fuse_req_t req, fuse_ino_t ino, int mask)
     
     Inode *inode_p = Inodes[ino];
     
+    if (inode_p == nullptr || inode_p->HasNoLinks()) {
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
     const struct fuse_ctx* ctx_p = fuse_req_ctx(req);
     
     cout << "access for " << ino << endl;
@@ -1092,6 +1207,10 @@ void FuseRamFs::FuseCreate(fuse_req_t req, fuse_ino_t parent, const char *name, 
     }
     
     Inode *parent_p = Inodes[parent];
+    if (parent_p == nullptr || parent_p->HasNoLinks()) {
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
     Directory *parentDir_p = dynamic_cast<Directory *>(parent_p);
     if (parentDir_p == NULL) {
         // The parent wasn't a directory. It can't have any children.
