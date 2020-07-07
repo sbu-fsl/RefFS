@@ -15,8 +15,10 @@
 #include "inode.hpp"
 #include "special_inode.hpp"
 
-SpecialInode::SpecialInode(enum SpecialInodeTypes type) :
-m_type(type) { }
+SpecialInode::SpecialInode(enum SpecialInodeTypes type, dev_t dev) :
+m_type(type) {
+    m_fuseEntryParam.attr.st_dev = dev;
+}
 
 //SpecialInode::~SpecialInode() {}
 
