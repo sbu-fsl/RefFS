@@ -912,16 +912,22 @@ void FuseRamFs::FuseRead(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 
 void FuseRamFs::FuseRename(fuse_req_t req, fuse_ino_t parent, const char *name, fuse_ino_t newparent, const char *newname)
 {
-    // Make sure the parent still exists.
-    if (parent >= Inodes.size()) {
+    // Make sure the parents still exists.
+    if (parent >= Inodes.size() || newparent >= Inodes.size()) {
         fuse_reply_err(req, ENOENT);
         return;
     }
     
     Inode *parentInode = Inodes[parent];
+    Inode *newParentInode = Inodes[newparent];
     
     // Make sure it's not an already deleted inode
     if (parentInode == nullptr || parentInode->HasNoLinks()) {
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
+
+    if (newParentInode == nullptr || newParentInode->HasNoLinks()) {
         fuse_reply_err(req, ENOENT);
         return;
     }
@@ -932,58 +938,70 @@ void FuseRamFs::FuseRename(fuse_req_t req, fuse_ino_t parent, const char *name, 
         fuse_reply_err(req, ENOTDIR);
         return;
     }
-    
-    // TODO: Handle permissions on dirs. You can't just rename anything you please!:
-    //    else if ((fi->flags & 3) != O_RDONLY)
-    //        fuse_reply_err(req, EACCES);
-    
-    // Return an error if the child doesn't exist.
-    fuse_ino_t ino = parentDir->ChildInodeNumberWithName(string(name));
-    if (ino == -1) {
-        fuse_reply_err(req, ENOENT);
-        return;
-    }
-    
-    // Make sure the new parent still exists.
-    if (newparent >= Inodes.size()) {
-        fuse_reply_err(req, ENOENT);
-        return;
-    }
-    
-    Inode *newParentInode = Inodes[newparent];
-    
-    if (newParentInode == nullptr || newParentInode->HasNoLinks()) {
-        fuse_reply_err(req, ENOENT);
-        return;
-    }
-    // The new parent must be a directory. TODO: Do we need this check? Will FUSE
-    // ever give us a parent that isn't a dir? Test this.
+
     Directory *newParentDir = dynamic_cast<Directory *>(newParentInode);
     if (newParentDir == NULL) {
         fuse_reply_err(req, ENOTDIR);
         return;
     }
     
+    // TODO: Handle permissions on dirs. You can't just rename anything you please!:
+    //    else if ((fi->flags & 3) != O_RDONLY)
+    //        fuse_reply_err(req, EACCES);
+    
+    // Return an error if the source doesn't exist.
+    fuse_ino_t srcIno = parentDir->ChildInodeNumberWithName(string(name));
+    if (srcIno == INO_NOTFOUND) {
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
+
+    Inode *srcInode = Inodes[srcIno];
+    
     // Look for an existing child with the same name in the new parent
     // directory
     fuse_ino_t existingIno = newParentDir->ChildInodeNumberWithName(string(newname));
-    // Type is unsigned so we have to explicitly check for largest value. TODO: Refactor please.
+    Inode *existingInode = nullptr;
+    /* If the newname (or destination) already exists, rename() should replace
+     * the destination with the source.
+     * HOWEVER, rename() will NOT replace if the destination is a non-empty
+     * directory, or the destination is a directory while the source is not,
+     * or the source is a directory but the dest is not.
+     */
     if (existingIno != INO_NOTFOUND) {
-        // There's already a child with that name. Replace it.
-        // TODO: What about directories with the same name?
-        Inode *existingInode_p = Inodes[parent];
-        cout << "Removing hard link to " << existingIno << endl;
-        existingInode_p->RemoveHardLink();
+        existingInode = Inodes[parent];
+        /* src is directory but dest is not: return ENOTDIR */
+        if (S_ISDIR(srcInode->GetAttr().st_mode) && !S_ISDIR(existingInode->GetAttr().st_mode)) {
+            fuse_reply_err(req, ENOTDIR);
+            return;
+        }
+        /* Vise versa: return EISDIR */
+        if (!S_ISDIR(srcInode->GetAttr().st_mode) && S_ISDIR(existingInode->GetAttr().st_mode)) {
+            fuse_reply_err(req, EISDIR);
+            return;
+        }
+        /* If dest is a non-empty directory, return ENOTEMPTY */
+        if (S_ISDIR(existingInode->GetAttr().st_mode)) {
+            Directory *existingDir = dynamic_cast<Directory *>(existingInode);
+            /* If the mode indicates a directory but it's not,
+               something bad might have happened */
+            assert(existingDir);
+            if (existingDir->Children().size() > 2) {
+                fuse_reply_err(req, ENOTEMPTY);
+                return;
+            }
+        }
+        /* Otherwise, let's replace the existing dest */
+        newParentDir->UpdateChild(string(newname), srcIno);
+        existingInode->RemoveHardLink();
+        parentDir->RemoveChild(string(name));
+        fuse_reply_err(req, 0);
+    } else {
+        int err = newParentDir->AddChild(string(newname), srcIno);
+        if (err == 0)
+            parentDir->RemoveChild(string(name));
+        fuse_reply_err(req, err);
     }
-    
-    // Update (or create) the new name and point it to the inode.
-    newParentDir->UpdateChild(string(newname), ino);
-    
-    // Mark the old name as unused. TODO: Should we just delete the old name?
-    parentDir->UpdateChild(string(name), 0);
-    
-    cout << "Rename " << name << " in " << parent << " to " << newname << " in " << newparent << endl;
-    fuse_reply_err(req, 0);
 }
 
 void FuseRamFs::FuseLink(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent, const char *newname)
