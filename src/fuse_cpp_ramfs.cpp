@@ -381,7 +381,7 @@ void FuseRamFs::FuseReadDir(fuse_req_t req, fuse_ino_t ino, size_t size,
         if (childInode == nullptr)
             continue;
 
-        stbuf = childInode->GetAttr();
+        childInode->GetAttr(&stbuf);
         stbuf.st_ino = (*childIterator)->second;
         
         // TODO: We don't look at sticky bits, etc. Revisit this in the future.
@@ -571,7 +571,7 @@ long FuseRamFs::do_create_node(Directory *parent, const char *name, mode_t mode,
         /* Initialize the new directory: Add '.' and '..' */
         Directory *dir_p = dynamic_cast<Directory *>(new_node);
         dir_p->AddChild(string("."), ino);
-        dir_p->AddChild(string(".."), parent->GetAttr().st_ino);
+        dir_p->AddChild(string(".."), parent->GetIno());
         parent->AddHardLink();
     }
 
@@ -650,6 +650,7 @@ void FuseRamFs::FuseUnlink(fuse_req_t req, fuse_ino_t parent, const char *name)
     Inode *inode_p = GetInode(ino);
     // TODO: Any way we can fail here? What if the inode doesn't exist? That probably indicates
     // a problem that happened earlier.
+    assert(inode_p);
     
     // Update the number of hardlinks in the target
     inode_p->RemoveHardLink();
@@ -856,17 +857,17 @@ void FuseRamFs::FuseRename(fuse_req_t req, fuse_ino_t parent, const char *name, 
     if (existingIno != INO_NOTFOUND) {
         existingInode = GetInode(parent);
         /* src is directory but dest is not: return ENOTDIR */
-        if (S_ISDIR(srcInode->GetAttr().st_mode) && !S_ISDIR(existingInode->GetAttr().st_mode)) {
+        if (S_ISDIR(srcInode->GetMode()) && !S_ISDIR(existingInode->GetMode())) {
             fuse_reply_err(req, ENOTDIR);
             return;
         }
         /* Vise versa: return EISDIR */
-        if (!S_ISDIR(srcInode->GetAttr().st_mode) && S_ISDIR(existingInode->GetAttr().st_mode)) {
+        if (!S_ISDIR(srcInode->GetMode()) && S_ISDIR(existingInode->GetMode())) {
             fuse_reply_err(req, EISDIR);
             return;
         }
         /* If dest is a non-empty directory, return ENOTEMPTY */
-        if (S_ISDIR(existingInode->GetAttr().st_mode)) {
+        if (S_ISDIR(existingInode->GetMode())) {
             Directory *existingDir = dynamic_cast<Directory *>(existingInode);
             /* If the mode indicates a directory but it's not,
                something bad might have happened */
