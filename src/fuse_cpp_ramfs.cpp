@@ -710,7 +710,7 @@ void FuseRamFs::FuseRmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
     /* Cannot remove if the directory is not empty */
     /* 2 is a base size: each dir contains at least '.' and '..' */
     /* This also prevents removing '..' */
-    if (dir_p->Children().size() > 2) {
+    if (!dir_p->IsEmpty()) {
         fuse_reply_err(req, ENOTEMPTY);
         return;
     }
@@ -872,7 +872,7 @@ void FuseRamFs::FuseRename(fuse_req_t req, fuse_ino_t parent, const char *name, 
             /* If the mode indicates a directory but it's not,
                something bad might have happened */
             assert(existingDir);
-            if (existingDir->Children().size() > 2) {
+            if (!existingDir->IsEmpty()) {
                 fuse_reply_err(req, ENOTEMPTY);
                 return;
             }

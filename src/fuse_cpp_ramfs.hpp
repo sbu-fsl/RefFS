@@ -51,7 +51,7 @@ private:
     static Inode *GetInode(fuse_ino_t ino) {
         std::shared_lock<std::shared_mutex> readlk(inodesRwSem);
         try {
-            return Inodes[ino];
+            return Inodes.at(ino);
         } catch (std::out_of_range e) {
             return nullptr;
         }
