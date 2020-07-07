@@ -5,15 +5,18 @@
 #ifndef inode_hpp
 #define inode_hpp
 
+#include "common.h"
+
 class Inode {
 private:    
     bool m_markedForDeletion;
-    unsigned long m_nlookup;
-
+    std::atomic_ulong m_nlookup;
 
 protected:
     struct fuse_entry_param m_fuseEntryParam;
+    std::shared_mutex entryRwSem;
     std::map<std::string, std::pair<void *, size_t> > m_xattr;
+    std::shared_mutex xattrRwSem;
     
 public:
     static const size_t BufBlockSize = 512;
@@ -42,11 +45,33 @@ public:
     virtual int RemoveXAttrAndReply(fuse_req_t req, const std::string &name);
     virtual int ReplyAccess(fuse_req_t req, int mask, gid_t gid, uid_t uid);
     
-    void AddHardLink() { m_fuseEntryParam.attr.st_nlink++; }
-    void RemoveHardLink() { m_fuseEntryParam.attr.st_nlink--; }
-    bool HasNoLinks() { return m_fuseEntryParam.attr.st_nlink == 0; }
-    size_t UsedBlocks() { return m_fuseEntryParam.attr.st_blocks; }
-    struct stat GetAttr() { return m_fuseEntryParam.attr; }
+    /* Atomic file attribute operations */
+    void AddHardLink() {
+        std::unique_lock<std::shared_mutex> lk(entryRwSem);
+        m_fuseEntryParam.attr.st_nlink++;
+    }
+    void RemoveHardLink() {
+        std::unique_lock<std::shared_mutex> lk(entryRwSem);
+        m_fuseEntryParam.attr.st_nlink--;
+    }
+    bool HasNoLinks() {
+        std::shared_lock<std::shared_mutex> lk(entryRwSem);
+        return m_fuseEntryParam.attr.st_nlink == 0;
+    }
+    size_t UsedBlocks() {
+        std::shared_lock<std::shared_mutex> lk(entryRwSem);
+        return m_fuseEntryParam.attr.st_blocks;
+    }
+    void GetAttr(struct stat *out) {
+        std::shared_lock<std::shared_mutex> lk(entryRwSem);
+        *out = m_fuseEntryParam.attr;
+    }
+    mode_t GetMode() {
+        std::shared_lock<std::shared_mutex> lk(entryRwSem);
+        return m_fuseEntryParam.attr.st_mode;
+    }
+    /* We assume that attr.st_ino won't change */
+    fuse_ino_t GetIno() { return m_fuseEntryParam.attr.st_ino; }
     
     bool Forgotten() { return m_nlookup == 0; }
 };
