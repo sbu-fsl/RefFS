@@ -36,19 +36,23 @@ Inode::~Inode() {}
 
 int Inode::ReplyEntry(fuse_req_t req) {
     m_nlookup++;
+    std::shared_lock<std::shared_mutex> lk(entryRwSem);
     return fuse_reply_entry(req, &m_fuseEntryParam);
 }
 
 int Inode::ReplyCreate(fuse_req_t req, struct fuse_file_info *fi) {
     m_nlookup++;
+    std::shared_lock<std::shared_mutex> lk(entryRwSem);
     return fuse_reply_create(req, &m_fuseEntryParam, fi);
 }
 
 int Inode::ReplyAttr(fuse_req_t req) {
+    std::shared_lock<std::shared_mutex> lk(entryRwSem);
     return fuse_reply_attr(req, &(m_fuseEntryParam.attr), 1.0);
 }
 
 int Inode::ReplySetAttr(fuse_req_t req, struct stat *attr, int to_set) {
+    std::unique_lock<std::shared_mutex> lk(entryRwSem);
     if (to_set & FUSE_SET_ATTR_MODE) {
         m_fuseEntryParam.attr.st_mode = attr->st_mode;
     }
@@ -113,6 +117,7 @@ void Inode::Forget(fuse_req_t req, unsigned long nlookup) {
 }
 
 int Inode::SetXAttrAndReply(fuse_req_t req, const string &name, const void *value, size_t size, int flags, uint32_t position) {
+    std::unique_lock<std::shared_mutex> lk(xattrRwSem);
     if (m_xattr.find(name) == m_xattr.end()) {
         if (flags & XATTR_CREATE) {
             return fuse_reply_err(req, EEXIST);
@@ -152,6 +157,7 @@ int Inode::SetXAttrAndReply(fuse_req_t req, const string &name, const void *valu
 }
 
 int Inode::GetXAttrAndReply(fuse_req_t req, const string &name, size_t size, uint32_t position) {
+    std::shared_lock<std::shared_mutex> lk(xattrRwSem);
     if (m_xattr.find(name) == m_xattr.end()) {
 #ifdef __APPLE__
         return fuse_reply_err(req, ENOATTR);
@@ -180,6 +186,7 @@ int Inode::GetXAttrAndReply(fuse_req_t req, const string &name, size_t size, uin
 int Inode::ListXAttrAndReply(fuse_req_t req, size_t size) {
     
     size_t listSize = 0;
+    std::shared_lock<std::shared_mutex> lk(xattrRwSem);
     for(map<string, pair<void *, size_t> >::iterator it = m_xattr.begin(); it != m_xattr.end(); it++) {
         listSize += (it->first.size() + 1);
     }
@@ -214,6 +221,7 @@ int Inode::ListXAttrAndReply(fuse_req_t req, size_t size) {
 }
 
 int Inode::RemoveXAttrAndReply(fuse_req_t req, const string &name) {
+    std::unique_lock<std::shared_mutex> lk(entryRwSem);
     map<string, pair<void *, size_t> >::iterator it = m_xattr.find(name);
     if (it == m_xattr.end()) {
 #ifdef __APPLE__
@@ -234,6 +242,7 @@ int Inode::ReplyAccess(fuse_req_t req, int mask, gid_t gid, uid_t uid) {
         return fuse_reply_err(req, 0);
     }
     
+    std::shared_lock<std::shared_mutex> lk(entryRwSem);
     // Check other
     if ((m_fuseEntryParam.attr.st_mode & mask) == mask) {
         return fuse_reply_err(req, 0);
