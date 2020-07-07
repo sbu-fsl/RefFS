@@ -9,6 +9,7 @@
 #include <string>
 #include <iostream>
 #include <stdexcept>
+#include <atomic>
 
 #include <cstdio>
 #include <cstdlib>
