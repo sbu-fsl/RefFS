@@ -44,16 +44,9 @@ vector<Inode *> FuseRamFs::Inodes = vector<Inode *>();
 queue<fuse_ino_t> FuseRamFs::DeletedInodes = queue<fuse_ino_t>();
 
 /**
- True if the filesystem is reclaiming inodes at the present point in time.
- */
-bool FuseRamFs::m_reclaimingInodes = false;
-
-
-/**
  The constants defining the capabilities and sizes of the filesystem.
  */
 struct statvfs FuseRamFs::m_stbuf = {};
-
 
 /**
  All the supported filesystem operations mapped to object-methods.
@@ -124,8 +117,6 @@ FuseRamFs::~FuseRamFs()
  */
 void FuseRamFs::FuseInit(void *userdata, struct fuse_conn_info *conn)
 {
-    m_reclaimingInodes = false;
-    
     m_stbuf.f_bfree  = m_stbuf.f_blocks;	/* Free blocks */
     m_stbuf.f_bavail = m_stbuf.f_blocks;	/* Blocks available to non-root */
     m_stbuf.f_ffree  = m_stbuf.f_files;	/* Free inodes */
@@ -150,8 +141,6 @@ void FuseRamFs::FuseInit(void *userdata, struct fuse_conn_info *conn)
     fuse_ino_t rootno = RegisterInode(root, S_IFDIR | 0777, 3, gid, uid);
     root->AddChild(string("."), rootno);
     root->AddChild(string(".."), rootno);
-    
-    cout << "init" << endl;
 }
 
 
@@ -165,8 +154,6 @@ void FuseRamFs::FuseDestroy(void *userdata)
     for(auto const& inode: Inodes) {
         delete inode;
     }
-    
-    cout << "destroy" << endl;
 }
 
 
@@ -204,8 +191,6 @@ void FuseRamFs::FuseLookup(fuse_req_t req, fuse_ino_t parent, const char *name)
         fuse_reply_err(req, ENOENT);
         return;
     }
-    
-    cout << "lookup for " << ino << ". nlookup++" << endl;
     inode->ReplyEntry(req);
 }
 
@@ -231,7 +216,6 @@ void FuseRamFs::FuseGetAttr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_inf
         return;
     }
     
-    cout << "getattr for " << ino << endl;
     inode->ReplyAttr(req);
 }
 
@@ -259,7 +243,6 @@ void FuseRamFs::FuseSetAttr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, i
         return;
     }
 
-    cout << "setattr for " << ino << endl;
     inode->ReplySetAttr(req, attr, to_set);
 }
 
@@ -294,7 +277,6 @@ void FuseRamFs::FuseOpenDir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_inf
     //    else if ((fi->flags & 3) != O_RDONLY)
     //        fuse_reply_err(req, EACCES);
     
-    cout << "opendir for " << ino << endl;
     fuse_reply_open(req, fi);
 }
 
@@ -330,7 +312,6 @@ void FuseRamFs::FuseReleaseDir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_
     //    else if ((fi->flags & 3) != O_RDONLY)
     //        fuse_reply_err(req, EACCES);
     
-    cout << "releasedir for " << ino << endl;
     fuse_reply_err(req, 0);
 }
 
@@ -348,8 +329,6 @@ void FuseRamFs::FuseReadDir(fuse_req_t req, fuse_ino_t ino, size_t size,
                              off_t off, struct fuse_file_info *fi)
 {
     (void) fi;
-    
-    cout << "readdir for " << ino;
     
     size_t numInodes = Inodes.size();
     // TODO[resolved]: Node may also be deleted.
@@ -374,7 +353,6 @@ void FuseRamFs::FuseReadDir(fuse_req_t req, fuse_ino_t ino, size_t size,
     }
     
     if (childIterator != NULL && *childIterator == dir->Children().end()) {
-        cout << " Was going to delete childIterator at " << (void *) childIterator << " pointing to " << (void *) &(**childIterator) << ". Let it leak instead" << endl;
         //delete childIterator;
         // This is the case where we've been called after we've sent all the children. End
         // with an empty buffer.
@@ -404,7 +382,6 @@ void FuseRamFs::FuseReadDir(fuse_req_t req, fuse_ino_t ino, size_t size,
     size_t bufSize = FuseRamFs::kReadDirBufSize < size ? FuseRamFs::kReadDirBufSize : size;
     char *buf = (char *) malloc(bufSize);
     if (buf == NULL) {
-        cerr << "*** fatal error: cannot allocate memory" << endl;
         fuse_reply_err(req, ENOMEM);
     }
 
@@ -414,7 +391,6 @@ void FuseRamFs::FuseReadDir(fuse_req_t req, fuse_ino_t ino, size_t size,
     size_t entriesAdded = 0;
     if (childIterator == NULL) {
         childIterator = new map<string, fuse_ino_t>::const_iterator(dir->Children().begin());
-        cout << " with new iterator at " << (void *) childIterator << " pointing to " << (void *) &(**childIterator);
     }
     
     while (entriesAdded < FuseRamFs::kReadDirEntriesPerResponse &&
@@ -445,17 +421,14 @@ void FuseRamFs::FuseReadDir(fuse_req_t req, fuse_ino_t ino, size_t size,
         if (bytesAdded > bufSize) {
             // Oops. There wasn't enough space for that last item. Back up and exit.
             --(*childIterator);
-            cout << ". backed iterator at " << (void *) childIterator << " to point to " << (void *) &(**childIterator);
             bytesAdded = oldSize;
             break;
         } else {
             ++(*childIterator);
-            cout << ". advanced iterator at " << (void *) childIterator << " to point to " << (void *) &(**childIterator);
             ++entriesAdded;
         }
     }
 
-    cout << endl;
     fuse_reply_buf(req, buf, bytesAdded);
     free(buf);
 }
@@ -489,7 +462,6 @@ void FuseRamFs::FuseOpen(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *
     
     // TODO: We seem to be able to delete a file and copy it back without a new inode being created. The only evidence is the open call. How do we handle this?
 
-    cout << "open for " << ino << ". with flags " << fi->flags << endl;
     fuse_reply_open(req, fi);
 }
 
@@ -518,7 +490,6 @@ void FuseRamFs::FuseRelease(fuse_req_t req, fuse_ino_t ino, struct fuse_file_inf
     //    else if ((fi->flags & 3) != O_RDONLY)
     //        fuse_reply_err(req, EACCES);
     
-    cout << "release for " << ino << endl;
     fuse_reply_err(req, 0);
 }
 
@@ -529,7 +500,6 @@ void FuseRamFs::FuseFsync(fuse_req_t req, fuse_ino_t ino, int datasync, struct f
         return;
     }
     
-    cout << "fysnc for " << ino << endl;
     fuse_reply_err(req, 0);
 }
 
@@ -549,7 +519,6 @@ void FuseRamFs::FuseFsyncDir(fuse_req_t req, fuse_ino_t ino, int datasync, struc
         return;
     }
     
-    cout << "fsyncdir for " << ino << endl;
     fuse_reply_err(req, 0);
 }
 
@@ -590,7 +559,6 @@ void FuseRamFs::FuseMknod(fuse_req_t req, fuse_ino_t parent, const char *name,
     long ino = do_create_node(parentDir_p, name, mode, rdev, ctx_p);
     
     if (ino > 0) {
-        cout << "mknod for " << ino << ". nlookup++" << endl;
         Inodes[ino]->ReplyEntry(req);
     } else {
         fuse_reply_err(req, -ino);
@@ -679,7 +647,6 @@ void FuseRamFs::FuseMkdir(fuse_req_t req, fuse_ino_t parent, const char *name, m
     long ino = do_create_node(parentDir_p, name, mode | S_IFDIR, 0, ctx_p);
    
     if (ino > 0) {
-        cout << "mkdir for " << ino << ". nlookup++" << endl;
         Inodes[ino]->ReplyEntry(req);
     } else {
         fuse_reply_err(req, -ino);
@@ -688,7 +655,6 @@ void FuseRamFs::FuseMkdir(fuse_req_t req, fuse_ino_t parent, const char *name, m
 
 void FuseRamFs::FuseUnlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
-    cout << "unlink for " << name << " in " << parent << endl;
     
     size_t numInodes = Inodes.size();
     if (parent >= numInodes) {
@@ -819,7 +785,6 @@ void FuseRamFs::FuseForget(fuse_req_t req, fuse_ino_t ino, unsigned long nlookup
         return;
     }
 
-    cout << "forget for " << ino << ". nlookup -= " << nlookup << endl;
     inode_p->Forget(req, nlookup);
     
     if (inode_p->Forgotten())
@@ -834,13 +799,10 @@ void FuseRamFs::FuseForget(fuse_req_t req, fuse_ino_t ino, unsigned long nlookup
 
             // Insert the inode number to DeletedInodes queue for slot reclaim
             DeletedInodes.push(ino);
-            
-            cout << "Freed inode " << ino << endl;
         }
         else
         {
             // TODO: Verify that this only happens on unmount. It's OK on unmount but bad elsewhere.
-            cout << "inode " << ino << " was forgotten but not deleted" << endl;
         }
     }
     
@@ -868,7 +830,6 @@ void FuseRamFs::FuseWrite(fuse_req_t req, fuse_ino_t ino, const char *buf, size_
     }
     // TODO: Handle info in fi.
 
-    cout << "Write request for " << size << " bytes at " << off << " to " << ino << endl;
     inode_p->WriteAndReply(req, buf, size, off);
 }
 
@@ -883,7 +844,6 @@ void FuseRamFs::FuseFlush(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info 
     
     // TODO: Handle info in fi.
     
-    cout << "flush for " << ino << endl;
     fuse_reply_err(req, 0);
 }
 
@@ -903,8 +863,6 @@ void FuseRamFs::FuseRead(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
         return;
     }
     // TODO: Handle info in fi.
-    
-    cout << "read for " << size << " at " << off << " from " << ino << endl;
     
     inode_p->ReadAndReply(req, size, off);
 }
@@ -1119,8 +1077,6 @@ void FuseRamFs::FuseReadLink(fuse_req_t req, fuse_ino_t ino)
     
     //const struct fuse_ctx* ctx_p = fuse_req_ctx(req);
     
-    cout << "readlink for " << ino << endl;
-    
     fuse_reply_readlink(req, link_p->Link().c_str());
 }
 
@@ -1133,8 +1089,6 @@ void FuseRamFs::FuseStatfs(fuse_req_t req, fuse_ino_t ino)
 //    }
 //    
 //    Inode *inode_p = Inodes[ino];
-    
-    cout << "statfs for " << ino << endl;
     
     fuse_reply_statfs(req, &m_stbuf);
 }
@@ -1161,7 +1115,6 @@ void FuseRamFs::FuseSetXAttr(fuse_req_t req, fuse_ino_t ino, const char *name, c
     uint32_t position = 0;
 #endif
 
-    cout << "setxattr for " << ino << endl;
     inode_p->SetXAttrAndReply(req, string(name), value, size, flags, position);
 }
 
@@ -1187,7 +1140,6 @@ void FuseRamFs::FuseGetXAttr(fuse_req_t req, fuse_ino_t ino, const char *name, s
     uint32_t position = 0;
 #endif
     
-    cout << "getxattr for " << ino << endl;
     inode_p->GetXAttrAndReply(req, string(name), size, position);
 }
 
@@ -1205,7 +1157,6 @@ void FuseRamFs::FuseListXAttr(fuse_req_t req, fuse_ino_t ino, size_t size)
         return;
     }
 
-    cout << "listxattr for " << ino << endl;
     inode_p->ListXAttrAndReply(req, size);
 }
 
@@ -1222,7 +1173,6 @@ void FuseRamFs::FuseRemoveXAttr(fuse_req_t req, fuse_ino_t ino, const char *name
         fuse_reply_err(req, ENOENT);
         return;
     }
-    cout << "removexattr for " << ino << endl;
     inode_p->RemoveXAttrAndReply(req, string(name));
 }
 
@@ -1240,8 +1190,6 @@ void FuseRamFs::FuseAccess(fuse_req_t req, fuse_ino_t ino, int mask)
         return;
     }
     const struct fuse_ctx* ctx_p = fuse_req_ctx(req);
-    
-    cout << "access for " << ino << endl;
     
     inode_p->ReplyAccess(req, mask, ctx_p->gid, ctx_p->uid);
 }
@@ -1276,7 +1224,6 @@ void FuseRamFs::FuseCreate(fuse_req_t req, fuse_ino_t parent, const char *name, 
     // Insert the inode into the directory. TODO: What if it already exists?
     parentDir_p->AddChild(string(name), ino);
     
-    cout << "create for " << ino << " with name " << name << " in " << parent << endl;
     inode_p->ReplyCreate(req, fi);
 }
 
@@ -1289,7 +1236,6 @@ void FuseRamFs::FuseGetLock(fuse_req_t req, fuse_ino_t ino, struct fuse_file_inf
     
     Inode *inode_p = Inodes[ino];
     
-    cout << "getlk for " << ino << endl;
     // TODO: implement locking
     //inode_p->ReplyGetLock(req, lock);
 }
