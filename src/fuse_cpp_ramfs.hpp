@@ -17,7 +17,6 @@ private:
     static const unsigned long kFilesystemId = 0xc13f944870434d8f;
     static const size_t kMaxFilenameLength = 1024;
     
-    static bool m_reclaimingInodes;
     static std::vector<Inode *> Inodes;
     static std::queue<fuse_ino_t> DeletedInodes;
     static struct statvfs m_stbuf;
