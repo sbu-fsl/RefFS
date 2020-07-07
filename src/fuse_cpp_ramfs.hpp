@@ -50,7 +50,11 @@ private:
 
     static Inode *GetInode(fuse_ino_t ino) {
         std::shared_lock<std::shared_mutex> readlk(inodesRwSem);
-        return Inodes[ino];
+        try {
+            return Inodes[ino];
+        } catch (std::out_of_range e) {
+            return nullptr;
+        }
     }
 
     static void UpdateInode(fuse_ino_t ino, Inode *newInode) {
