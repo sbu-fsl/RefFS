@@ -2,15 +2,7 @@
  *  @copyright 2016 Peter Watkins. All rights reserved.
  */
 
-#include <cstdio>
-#include <cerrno>
-#include <string>
-#include <map>
-#ifdef __APPLE__
-#include <osxfuse/fuse/fuse_lowlevel.h>
-#else
-#include <fuse/fuse_lowlevel.h>
-#endif
+#include "common.h"
 
 #include "inode.hpp"
 #include "special_inode.hpp"

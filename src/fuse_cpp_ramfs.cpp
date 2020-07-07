@@ -6,22 +6,7 @@
 #define FUSE_USE_VERSION 30
 #endif
 
-#include <vector>
-#include <queue>
-#include <map>
-#include <mutex>
-#include <string>
-#include <iostream>
-#include <stdlib.h>
-#include <cerrno>
-#include <cassert>
-#include <cstring>
-#ifdef __APPLE__
-#include <osxfuse/fuse/fuse_lowlevel.h>
-#else
-#include <fuse/fuse_lowlevel.h>
-#endif
-#include <unistd.h>
+#include "common.h"
 
 #include "inode.hpp"
 #include "file.hpp"
@@ -29,7 +14,6 @@
 #include "special_inode.hpp"
 #include "symlink.hpp"
 #include "fuse_cpp_ramfs.hpp"
-#include "util.hpp"
 
 using namespace std;
 

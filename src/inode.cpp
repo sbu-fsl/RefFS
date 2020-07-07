@@ -2,25 +2,7 @@
  *  @copyright 2016 Peter Watkins. All rights reserved.
  */
 
-#if !defined(FUSE_USE_VERSION) || FUSE_USE_VERSION < 30
-#define FUSE_USE_VERSION 30
-#endif
-
-#include <cstdio>
-#include <cstdlib>
-#include <string>
-#include <cerrno>
-#include <map>
-#include <tuple>
-#include <cstring>
-#include <unistd.h>
-#include <fcntl.h>
-#ifdef __APPLE__
-#include <osxfuse/fuse/fuse_lowlevel.h>
-#else
-#include <fuse/fuse_lowlevel.h>
-#endif
-#include <sys/xattr.h>
+#include "common.h"
 
 #include "util.hpp"
 #include "inode.hpp"

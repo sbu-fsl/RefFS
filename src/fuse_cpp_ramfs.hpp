@@ -6,6 +6,7 @@
 #define fuse_ram_fs_hpp
 
 #include "common.h"
+#include "inode.hpp"
 #include "directory.hpp"
 
 class FuseRamFs {

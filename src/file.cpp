@@ -2,20 +2,8 @@
  *  @copyright 2016 Peter Watkins. All rights reserved.
  */
 
-#include <cstdio>
-#include <cstdlib>
-#include <string>
-#include <vector>
-#include <queue>
-#include <map>
-#include <cstring>
-#ifdef __APPLE__
-#include <osxfuse/fuse/fuse_lowlevel.h>
-#else
-#include <fuse/fuse_lowlevel.h>
-#endif
+#include "common.h"
 
-#include "util.hpp"
 #include "inode.hpp"
 #include "fuse_cpp_ramfs.hpp"
 #include "file.hpp"
@@ -42,7 +30,7 @@ int File::FileTruncate(size_t newSize) {
 
     /* If the file is expanded, zero out outstanding bytes */
     if (newSize > oldSize) {
-        memset(m_buf + oldSize, 0, newSize - oldSize);
+        memset((char *)m_buf + oldSize, 0, newSize - oldSize);
     }
 
     /* Update size / block usage */

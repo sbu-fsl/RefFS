@@ -2,19 +2,10 @@
  *  @copyright 2016 Peter Watkins. All rights reserved.
  */
 
-#include <cstdio>
-#include <string>
-#include <map>
-#include <cerrno>
-#ifdef __APPLE__
-#include <osxfuse/fuse/fuse_lowlevel.h>
-#else
-#include <fuse/fuse_lowlevel.h>
-#endif
+#include "common.h"
 
 #include "inode.hpp"
 #include "directory.hpp"
-#include "util.hpp"
 
 using namespace std;
 

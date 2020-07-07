@@ -2,20 +2,7 @@
  *  @copyright 2016 Peter Watkins. All rights reserved.
  */
 
-#if !defined(FUSE_USE_VERSION) || FUSE_USE_VERSION < 30
-#define FUSE_USE_VERSION 30
-#endif
-
-#ifdef __APPLE__
-#include <osxfuse/fuse/fuse_lowlevel.h>
-#else
-#include <fuse/fuse_lowlevel.h>
-#endif
-#include <iostream>
-#include <vector>
-#include <queue>
-#include <map>
-#include <cstring>
+#include "common.h"
 
 #include "inode.hpp"
 #include "fuse_cpp_ramfs.hpp"
