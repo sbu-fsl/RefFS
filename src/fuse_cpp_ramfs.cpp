@@ -1006,56 +1006,48 @@ void FuseRamFs::FuseRename(fuse_req_t req, fuse_ino_t parent, const char *name, 
 
 void FuseRamFs::FuseLink(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent, const char *newname)
 {
-    // Make sure the new parent still exists.
-    if (newparent >= Inodes.size()) {
+    // Make sure the source inode and the parent exists.
+    if (ino >= Inodes.size() || newparent >= Inodes.size()) {
         fuse_reply_err(req, ENOENT);
         return;
     }
     
-    Inode *inode_p = Inodes[newparent];
+    Inode *parent = Inodes[newparent];
+    Inode *src = Inodes[ino];
     
-    if (inode_p == nullptr || inode_p->HasNoLinks()) {
+    if (src == nullptr || src->HasNoLinks()) {
+        fuse_reply_err(req, ENOENT);
+        return;
+    }
+
+    if (parent == nullptr || parent->HasNoLinks()) {
         fuse_reply_err(req, ENOENT);
         return;
     }
 
     // The new parent must be a directory. TODO: Do we need this check? Will FUSE
     // ever give us a parent that isn't a dir? Test this.
-    Directory *newParentDir_p = dynamic_cast<Directory *>(inode_p);
-    if (newParentDir_p == NULL) {
+    Directory *parentDir = dynamic_cast<Directory *>(parent);
+    if (parentDir == NULL) {
         fuse_reply_err(req, ENOTDIR);
         return;
     }
-    
-    // Make target still exists.
-    if (ino >= Inodes.size()) {
-        fuse_reply_err(req, ENOENT);
-        return;
-    }
-    
-    inode_p = Inodes[ino];
-    
-    if (inode_p == nullptr || inode_p->HasNoLinks()) {
-        fuse_reply_err(req, ENOENT);
-        return;
-    }
-    // Look for an existing child with the same name in the new parent
-    // directory
-    fuse_ino_t existingIno = newParentDir_p->ChildInodeNumberWithName(string(newname));
+
+    /* If newname exists, we do NOT overwrite it */
+    fuse_ino_t existingIno = parentDir->ChildInodeNumberWithName(string(newname));
     // Type is unsigned so we have to explicitly check for largest value. TODO: Refactor please.
-    if (existingIno != -1 && existingIno > 0) {
+    if (existingIno != INO_NOTFOUND) {
         // There's already a child with that name. Return an error.
         fuse_reply_err(req, EEXIST);
     }
     
     // Create the new name and point it to the inode.
-    newParentDir_p->AddChild(string(newname), ino);
+    parentDir->AddChild(string(newname), ino);
     
     // Update the number of hardlinks in the target
-    inode_p->AddHardLink();
+    src->AddHardLink();
     
-    cout << "link " << newname << " in " << newparent << " to " << ino << endl;
-    inode_p->ReplyEntry(req);
+    parent->ReplyEntry(req);
 }
 
 void FuseRamFs::FuseSymlink(fuse_req_t req, const char *link, fuse_ino_t parent, const char *name)
