@@ -8,6 +8,9 @@
 #include <map>
 #include <string>
 #include <iostream>
+#include <stdexcept>
+
+#include <cstdio>
 #include <cstdlib>
 #include <cerrno>
 #include <cassert>
