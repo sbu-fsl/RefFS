@@ -1063,10 +1063,17 @@ void FuseRamFs::FuseSymlink(fuse_req_t req, const char *link, fuse_ino_t parent,
         fuse_reply_err(req, ENOENT);
         return;
     }
+
     // You can only make something inside a directory
     Directory *dir = dynamic_cast<Directory *>(parent_p);
     if (dir == NULL) {
         fuse_reply_err(req, ENOTDIR);
+        return;
+    }
+
+    /* We don't overwrite if name exists in parent directory */
+    if (dir->ChildInodeNumberWithName(string(name)) != INO_NOTFOUND) {
+        fuse_reply_err(req, EEXIST);
         return;
     }
     
@@ -1076,15 +1083,12 @@ void FuseRamFs::FuseSymlink(fuse_req_t req, const char *link, fuse_ino_t parent,
     
     const struct fuse_ctx* ctx_p = fuse_req_ctx(req);
     
-    
     Inode *inode_p = new SymLink(string(link));
-    fuse_ino_t ino = RegisterInode(inode_p, S_IFLNK | 0755, 1, ctx_p->gid, ctx_p->uid);
+    fuse_ino_t ino = RegisterInode(inode_p, S_IFLNK | 0777, 1, ctx_p->gid, ctx_p->uid);
     
     // Insert the inode into the directory. TODO: What if it already exists?
     dir->AddChild(string(name), ino);
     
-    // TODO: Is reply_entry only for directories? What about files?
-    cout << "symlink for " << ino << ". nlookup++" << endl;
     inode_p->ReplyEntry(req);
 }
 
