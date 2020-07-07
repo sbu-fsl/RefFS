@@ -28,8 +28,10 @@ int File::WriteAndReply(fuse_req_t req, const char *buf, size_t size, off_t off)
     // Allocate more memory if we don't have space.
     size_t newSize = off + size;
     size_t originalCapacity = Inode::BufBlockSize * m_fuseEntryParam.attr.st_blocks;
+    size_t newBlocks = newSize/Inode::BufBlockSize + (newSize % Inode::BufBlockSize != 0);
+
+    /* Request for more memory if write() expands the file */
     if (newSize > originalCapacity) {
-        size_t newBlocks = newSize/Inode::BufBlockSize + (newSize % Inode::BufBlockSize != 0);
         void *newBuf = realloc(m_buf, newBlocks * Inode::BufBlockSize);
         // If we ran out of memory, let the caller know that no bytes were
         // written.
@@ -48,11 +50,19 @@ int File::WriteAndReply(fuse_req_t req, const char *buf, size_t size, off_t off)
     // been called with the new size and offset. If realloc failed, we wouldn't
     // be here.
     memcpy((char *) m_buf + off, buf, size);
-    if (newSize > m_fuseEntryParam.attr.st_size) {
+
+    /* Update size and block usage info */
+    if (newSize > originalCapacity) {
+        FuseRamFs::UpdateUsedBlocks(newBlocks - m_fuseEntryParam.attr.st_blocks);
+    }
+
+    std::unique_lock<std::shared_mutex> lk(entryRwSem);
+    if (newSize > originalCapacity) {
+        m_fuseEntryParam.attr.st_blocks = newBlocks;
         m_fuseEntryParam.attr.st_size = newSize;
     }
     
-    // TODO: What do we do if this fails? Do we care? Log the event?
+    /* Changes to file content: both mtime and ctime will change */
 #ifdef __APPLE__
     clock_gettime(CLOCK_REALTIME, &(m_fuseEntryParam.attr.st_ctimespec));
     m_fuseEntryParam.attr.st_mtimespec = m_fuseEntryParam.attr.st_ctimespec;
@@ -73,6 +83,7 @@ int File::ReadAndReply(fuse_req_t req, size_t size, off_t off) {
     // Update access time. TODO: This could get very intensive. Some
     // filesystems buffer this with options at mount time. Look into this.
     // TODO: What do we do if this fails? Do we care? Log the event?
+    std::unique_lock<std::shared_mutex> lk(entryRwSem);
 #ifdef __APPLE__
     clock_gettime(CLOCK_REALTIME, &(m_fuseEntryParam.attr.st_atimespec));
 #else
