@@ -24,6 +24,44 @@ File::~File() {
     free(m_buf);
 }
 
+int File::FileTruncate(size_t newSize) {
+    size_t newBlocks = get_nblocks(newSize, File::BufBlockSize);
+    size_t oldBlocks = Inode::UsedBlocks();
+    size_t oldSize = Inode::Size();
+
+    /* Realloc if needed */
+    if (newBlocks != oldBlocks) {
+        void *newbuf = realloc(m_buf, newBlocks * File::BufBlockSize);
+        if (newbuf == nullptr) {
+            /* Probably because newsize exceeds limit;
+             * return EINVAL in this case */
+            return EINVAL;
+        }
+        m_buf = newbuf;
+    }
+
+    /* If the file is expanded, zero out outstanding bytes */
+    if (newSize > oldSize) {
+        memset(m_buf + oldSize, 0, newSize - oldSize);
+    }
+
+    /* Update size / block usage */
+    FuseRamFs::UpdateUsedBlocks(newBlocks - oldBlocks);
+    std::unique_lock<std::shared_mutex> lk(entryRwSem);
+    m_fuseEntryParam.attr.st_blocks = newBlocks;
+    m_fuseEntryParam.attr.st_size = newSize;
+    
+    /* Changes to file content: both mtime and ctime will change */
+#ifdef __APPLE__
+    clock_gettime(CLOCK_REALTIME, &(m_fuseEntryParam.attr.st_ctimespec));
+    m_fuseEntryParam.attr.st_mtimespec = m_fuseEntryParam.attr.st_ctimespec;
+#else
+    clock_gettime(CLOCK_REALTIME, &(m_fuseEntryParam.attr.st_ctim));
+    m_fuseEntryParam.attr.st_mtim = m_fuseEntryParam.attr.st_ctim;
+#endif
+    return 0;
+}
+
 int File::WriteAndReply(fuse_req_t req, const char *buf, size_t size, off_t off) {
     // Allocate more memory if we don't have space.
     size_t newSize = off + size;
@@ -41,8 +79,6 @@ int File::WriteAndReply(fuse_req_t req, const char *buf, size_t size, off_t off)
         
         // Update our buffer size
         m_buf = newBuf;
-        FuseRamFs::UpdateUsedBlocks(newBlocks - m_fuseEntryParam.attr.st_blocks);
-        m_fuseEntryParam.attr.st_blocks = newBlocks;
     }
     
     // Write to the buffer. TODO: Check if SRC and DST overlap.

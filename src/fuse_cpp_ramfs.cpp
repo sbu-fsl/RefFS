@@ -241,6 +241,28 @@ void FuseRamFs::FuseSetAttr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, i
         return;
     }
 
+    /* Non-null fi means the setattr() is called by ftruncate(). */
+    if (fi && (to_set & FUSE_SET_ATTR_SIZE)) {
+        File *file = dynamic_cast<File *>(inode);
+        /* Cannot ftruncate a non-regular file */
+        if (file == nullptr) {
+            if (S_ISDIR(inode->GetMode())) {
+                fuse_reply_err(req, EISDIR);
+            } else {
+                fuse_reply_err(req, EINVAL);
+            }
+            return;
+        }
+        int ret = file->FileTruncate(attr->st_size);
+        if (ret == 0) {
+            file->ReplyAttr(req);
+        } else {
+            fuse_reply_err(req, ret);
+        }
+        return;
+    }
+
+    to_set &= (~FUSE_SET_ATTR_SIZE);
     inode->ReplySetAttr(req, attr, to_set);
 }
 

@@ -62,6 +62,10 @@ public:
         std::shared_lock<std::shared_mutex> lk(entryRwSem);
         return m_fuseEntryParam.attr.st_blocks;
     }
+    size_t Size() {
+        std::shared_lock<std::shared_mutex> lk(entryRwSem);
+        return m_fuseEntryParam.attr.st_size;
+    }
     void GetAttr(struct stat *out) {
         std::shared_lock<std::shared_mutex> lk(entryRwSem);
         *out = m_fuseEntryParam.attr;
