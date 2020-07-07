@@ -19,9 +19,11 @@
 using namespace std;
 
 void Directory::UpdateSize(ssize_t delta) {
+    std::unique_lock<std::shared_mutex> lk(entryRwSem);
+
     /* Avoid negative result */
     if (delta < 0 && -delta > m_fuseEntryParam.attr.st_size)
-        return;
+        delta = m_fuseEntryParam.attr.st_size;
 
     m_fuseEntryParam.attr.st_size += delta;
     m_fuseEntryParam.attr.st_blocks = get_nblocks(m_fuseEntryParam.attr.st_size, Inode::BufBlockSize);
@@ -40,6 +42,8 @@ void Directory::Initialize(fuse_ino_t ino, mode_t mode, nlink_t nlink, gid_t gid
  @return The child inode number if the child is found. -1 otherwise.
  */
 fuse_ino_t Directory::ChildInodeNumberWithName(const string &name) {
+    std::shared_lock<std::shared_mutex> lk(childrenRwSem);
+
     if (m_children.find(name) == m_children.end()) {
         return INO_NOTFOUND;
     }
@@ -55,6 +59,8 @@ fuse_ino_t Directory::ChildInodeNumberWithName(const string &name) {
  @return 0 if successful, or errno if error occurred
  */
 int Directory::AddChild(const string &name, fuse_ino_t ino) {
+    std::unique_lock<std::shared_mutex> lk(childrenRwSem);
+
     if (m_children.find(name) != m_children.end())
         return -EEXIST;
 
@@ -62,6 +68,7 @@ int Directory::AddChild(const string &name, fuse_ino_t ino) {
     if (!success)
         return -ENOMEM;
 
+    lk.unlock();
     size_t elem_size = sizeof(_Rb_tree_node_base) + sizeof(fuse_ino_t) + sizeof(std::string) + name.size();
     UpdateSize(elem_size);
     return 0;
@@ -75,6 +82,8 @@ int Directory::AddChild(const string &name, fuse_ino_t ino) {
  @return 0 if successful, or errno if error occurred
  */
 int Directory::UpdateChild(const string &name, fuse_ino_t ino) {
+    std::unique_lock<std::shared_mutex> lk(childrenRwSem);
+
     if (m_children.find(name) == m_children.end())
         return -ENOENT;
 
@@ -82,7 +91,6 @@ int Directory::UpdateChild(const string &name, fuse_ino_t ino) {
     
     // TODO: What about directory sizes? Shouldn't we increase the reported size of our dir?
     // NOTE: This is an **update** function, why should we care about increasing size here?
-    
     return 0;
 }
 
@@ -96,11 +104,15 @@ int Directory::UpdateChild(const string &name, fuse_ino_t ino) {
  @return 0 if successful, or errno if error occurred
  */
 int Directory::RemoveChild(const string &name) {
+    std::unique_lock<std::shared_mutex> lk(childrenRwSem);
+
     auto child = m_children.find(name);
     if (child == m_children.end())
         return -ENOENT;
 
     m_children.erase(child);
+
+    lk.unlock();
     size_t elem_size = sizeof(_Rb_tree_node_base) + sizeof(fuse_ino_t) + sizeof(std::string) + name.size();
     UpdateSize(-elem_size);
     return 0;

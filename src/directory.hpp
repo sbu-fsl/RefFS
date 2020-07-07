@@ -5,9 +5,12 @@
 #ifndef directory_hpp
 #define directory_hpp
 
+#include "common.h"
+
 class Directory : public Inode {
 private:
     std::map<std::string, fuse_ino_t> m_children;
+    std::shared_mutex childrenRwSem;
 
     void UpdateSize(ssize_t delta);
 public:
@@ -20,7 +23,15 @@ public:
     int RemoveChild(const std::string &name);
     int WriteAndReply(fuse_req_t req, const char *buf, size_t size, off_t off);
     int ReadAndReply(fuse_req_t req, size_t size, off_t off);
+
+    /* Atomic children operations */
+    bool IsEmpty() {
+        std::shared_lock<std::shared_mutex> lk(childrenRwSem);
+        return m_children.size() <= 2;
+    }
     
+    /* NOTE: Not guarded, so accuracy is not guaranteed.
+     * Mainly intended for readdir() method. */
     const std::map<std::string, fuse_ino_t> &Children() { return m_children; }
 };
 
