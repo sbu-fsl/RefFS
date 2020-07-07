@@ -5,6 +5,7 @@
 #ifndef fuse_ram_fs_hpp
 #define fuse_ram_fs_hpp
 
+#include "common.h"
 #include "directory.hpp"
 
 class FuseRamFs {
@@ -18,8 +19,11 @@ private:
     static const size_t kMaxFilenameLength = 1024;
     
     static std::vector<Inode *> Inodes;
+    static std::shared_mutex inodesRwSem;
     static std::queue<fuse_ino_t> DeletedInodes;
+    static std::mutex deletedInodesMutex;
     static struct statvfs m_stbuf;
+    static std::mutex stbufMutex;
     
 public:
     static struct fuse_lowlevel_ops FuseOps;
@@ -28,6 +32,37 @@ private:
     static long do_create_node(Directory *parent, const char *name, mode_t mode, dev_t dev, const struct fuse_ctx *ctx);
     static fuse_ino_t RegisterInode(Inode *inode_p, mode_t mode, nlink_t nlink, gid_t gid, uid_t uid);
     static fuse_ino_t NextInode();
+
+    /* Atomic inode table operations */
+    static void DeleteInode(fuse_ino_t ino) {
+        std::unique_lock<std::shared_mutex> L1(inodesRwSem, std::defer_lock);
+        std::unique_lock<std::mutex> L2(deletedInodesMutex, std::defer_lock);
+        std::lock(L1, L2);
+        Inodes[ino] = nullptr;
+        DeletedInodes.push(ino);
+    }
+
+    static fuse_ino_t AddInode(Inode *inode) {
+        std::unique_lock<std::shared_mutex> writelk(inodesRwSem);
+        Inodes.push_back(inode);
+        return Inodes.size() - 1;
+    }
+
+    static Inode *GetInode(fuse_ino_t ino) {
+        std::shared_lock<std::shared_mutex> readlk(inodesRwSem);
+        return Inodes[ino];
+    }
+
+    static void UpdateInode(fuse_ino_t ino, Inode *newInode) {
+        std::unique_lock<std::shared_mutex> writelk(inodesRwSem);
+        Inodes[ino] = newInode;
+    }
+
+    static fuse_ino_t PopOneDeletedInode() {
+        std::lock_guard<std::mutex> lk(deletedInodesMutex);
+        fuse_ino_t ino = DeletedInodes.front();
+        DeletedInodes.pop();
+    }
     
 public:
     FuseRamFs();
@@ -79,8 +114,20 @@ public:
     static void FuseCreate(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode, struct fuse_file_info *fi);
     static void FuseGetLock(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi, struct flock *lock);
     
-    static void UpdateUsedBlocks(ssize_t blocksAdded) { m_stbuf.f_bfree -= blocksAdded; m_stbuf.f_bavail -= blocksAdded;}
-    static void UpdateUsedInodes(ssize_t inodesAdded) { m_stbuf.f_ffree -= inodesAdded; m_stbuf.f_favail -= inodesAdded;}
+    static void UpdateUsedBlocks(ssize_t blocksAdded) {
+        std::lock_guard<std::mutex> lk(stbufMutex);
+        m_stbuf.f_bfree -= blocksAdded;
+        m_stbuf.f_bavail -= blocksAdded;
+    }
+    static void UpdateUsedInodes(ssize_t inodesAdded) {
+        std::lock_guard<std::mutex> lk(stbufMutex);
+        m_stbuf.f_ffree -= inodesAdded;
+        m_stbuf.f_favail -= inodesAdded;
+    }
+    static void FsStat(struct statvfs *out) {
+        std::lock_guard<std::mutex> lk(stbufMutex);
+        *out = m_stbuf;
+    }
 };
 
 #endif /* fuse_ram_fs_hpp */

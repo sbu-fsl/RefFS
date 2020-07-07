@@ -9,6 +9,7 @@
 #include <vector>
 #include <queue>
 #include <map>
+#include <mutex>
 #include <string>
 #include <iostream>
 #include <stdlib.h>
@@ -36,17 +37,19 @@ using namespace std;
  All the Inode objects in the system.
  */
 vector<Inode *> FuseRamFs::Inodes = vector<Inode *>();
-
+std::shared_mutex FuseRamFs::inodesRwSem;
 
 /**
  The Inodes which have been deleted.
  */
 queue<fuse_ino_t> FuseRamFs::DeletedInodes = queue<fuse_ino_t>();
+std::mutex FuseRamFs::deletedInodesMutex;
 
 /**
  The constants defining the capabilities and sizes of the filesystem.
  */
 struct statvfs FuseRamFs::m_stbuf = {};
+std::mutex FuseRamFs::stbufMutex;
 
 /**
  All the supported filesystem operations mapped to object-methods.
@@ -777,6 +780,11 @@ void FuseRamFs::FuseRmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
     fuse_reply_err(req, 0);
 }
 
+void BatchDeleteInodes(std::vector<Inode *> &candidates)
+{
+
+}
+
 void FuseRamFs::FuseForget(fuse_req_t req, fuse_ino_t ino, unsigned long nlookup)
 {
     Inode *inode_p = Inodes[ino];
@@ -794,11 +802,10 @@ void FuseRamFs::FuseForget(fuse_req_t req, fuse_ino_t ino, unsigned long nlookup
             // Let's just delete this inode and free memory.
             size_t blocks_freed = inode_p->UsedBlocks();
             delete inode_p;
-            Inodes[ino] = nullptr;
+            /* Atomically erase the record in inodes table and
+             * push this ino to the DeletedInodes list */
+            DeleteInode(ino);
             FuseRamFs::UpdateUsedInodes(-blocks_freed);
-
-            // Insert the inode number to DeletedInodes queue for slot reclaim
-            DeletedInodes.push(ino);
         }
         else
         {
@@ -1246,13 +1253,11 @@ fuse_ino_t FuseRamFs::RegisterInode(Inode *inode_p, mode_t mode, nlink_t nlink, 
     // not.
     fuse_ino_t ino;
     if (DeletedInodes.empty()) {
-        Inodes.push_back(inode_p);
-        ino = Inodes.size() - 1;
+        ino = FuseRamFs::AddInode(inode_p);
         FuseRamFs::UpdateUsedInodes(1);
     } else {
-        ino = DeletedInodes.front();
-        DeletedInodes.pop();
-        Inodes[ino] = inode_p;
+        ino = PopOneDeletedInode();
+        FuseRamFs::UpdateInode(ino, inode_p);
     }
 
     inode_p->Initialize(ino, mode, nlink, gid, uid);
