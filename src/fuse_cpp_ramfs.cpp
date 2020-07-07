@@ -574,6 +574,12 @@ void FuseRamFs::FuseMknod(fuse_req_t req, fuse_ino_t parent, const char *name,
         fuse_reply_err(req, EISDIR);
         return;
     }
+
+    /* Don't use an existing name */
+    if (parentDir_p->ChildInodeNumberWithName(string(name)) != INO_NOTFOUND) {
+        fuse_reply_err(req, EEXIST);
+        return;
+    }
     
     // TODO: Handle permissions on dirs. You can't just create anything you please!:
     //    else if ((fi->flags & 3) != O_RDONLY)
@@ -581,50 +587,68 @@ void FuseRamFs::FuseMknod(fuse_req_t req, fuse_ino_t parent, const char *name,
     
     const struct fuse_ctx* ctx_p = fuse_req_ctx(req);
 
+    long ino = do_create_node(parentDir_p, name, mode, rdev, ctx_p);
     
-    Inode *inode_p;
-    
-    nlink_t nlink = 0;
-    if (S_ISDIR(mode)) {
-        inode_p = new Directory();
-        nlink = 2;
-        
-        // Update the number of hardlinks in the parent dir
-        parentDir_p->AddHardLink();
-    } else if (S_ISREG(mode)) {
-        inode_p = new File();
-        nlink = 1;
+    if (ino > 0) {
+        cout << "mknod for " << ino << ". nlookup++" << endl;
+        Inodes[ino]->ReplyEntry(req);
     } else {
-        // TODO: Handle
-        // S_ISBLK
-        // S_ISCHR
-        // S_ISDIR
-        // S_ISFIFO
-        // S_ISREG
-        // S_ISLNK
-        // S_ISSOCK
-        // ...instead of returning this error.
-        fuse_reply_err(req, ENOENT);
-        return;
+        fuse_reply_err(req, -ino);
     }
-    
-    // TODO: Handle: S_ISCHR S_ISBLK S_ISFIFO S_ISLNK S_ISSOCK S_TYPEISMQ S_TYPEISSEM S_TYPEISSHM
-    assert(inode_p != NULL);
-
-    fuse_ino_t ino = RegisterInode(inode_p, mode, nlink, ctx_p->gid, ctx_p->uid);
-    
-    // Insert the inode into the directory. TODO: What if it already exists?
-    parentDir_p->AddChild(string(name), ino);
-    
-    // TODO: Is reply_entry only for directories? What about files?
-    cout << "mknod for " << ino << ". nlookup++" << endl;
-    inode_p->ReplyEntry(req);
 }
 
+/* do_create_node: Helper function to create filesystem object
+ * 
+ * @param[in] parent:   Parent directory object
+ * @param[in] name:     The name of the new object
+ * @param[in] mode:     Mode
+ * @param[in] dev:      Device number (required only if creating a device)
+ * @param[in] ctx:      FUSE context
+ * 
+ * @return: If successful, return the inode number of created node.
+ *          Otherwise, return a negative error code.
+ */
+long FuseRamFs::do_create_node(Directory *parent, const char *name, mode_t mode, dev_t dev, const struct fuse_ctx *ctx)
+{
+    Inode *new_node;
+    nlink_t links = 1;
 
+    /* Create object based on mode */
+    if (S_ISREG(mode)) {
+        new_node = new File();
+    } else if (S_ISDIR(mode)) {
+        new_node = new Directory();
+        links = 2;
+    } else if (S_ISCHR(mode)) {
+        new_node = new SpecialInode(SPECIAL_INODE_CHAR_DEV, dev);
+    } else if (S_ISBLK(mode)) {
+        new_node = new SpecialInode(SPECIAL_INODE_BLOCK_DEV, dev);
+    } else if (S_ISFIFO(mode)) {
+        new_node = new SpecialInode(SPECIAL_INODE_FIFO);
+    } else if (S_ISSOCK(mode)) {
+        new_node = new SpecialInode(SPECIAL_INODE_SOCK);
+    } else {
+        return -EINVAL;
+    }
+
+    /* Register the new inode into file system */
+    fuse_ino_t ino = RegisterInode(new_node, mode, links, ctx->gid, ctx->uid);
+
+    /* Special treatment for directories */
+    if (S_ISDIR(mode)) {
+        /* Initialize the new directory: Add '.' and '..' */
+        Directory *dir_p = dynamic_cast<Directory *>(new_node);
+        dir_p->AddChild(string("."), ino);
+        dir_p->AddChild(string(".."), parent->GetAttr().st_ino);
+        parent->AddHardLink();
+    }
+
+    // Insert the new entry into the directory.
+    parent->AddChild(string(name), ino);
+    return ino;
+}
 
 void FuseRamFs::FuseMkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
-
 {
     if (parent >= Inodes.size()) {
         fuse_reply_err(req, ENOENT);
@@ -651,21 +675,15 @@ void FuseRamFs::FuseMkdir(fuse_req_t req, fuse_ino_t parent, const char *name, m
     //        fuse_reply_err(req, EACCES);
     
     const struct fuse_ctx* ctx_p = fuse_req_ctx(req);
-    
-    Directory *dir_p = new Directory();
-    fuse_ino_t ino = RegisterInode(dir_p, mode | S_IFDIR, 2, ctx_p->gid, ctx_p->uid);
 
-    // TODO: Handle error if adding things failed: Needs to rollback
-    /* Initialize the new directory: Add '.' and '..' */
-    dir_p->AddChild(string("."), ino);
-    dir_p->AddChild(string(".."), parent);
-    parentDir_p->AddHardLink();
-
-    // Insert the inode into the directory. TODO: What if it already exists?
-    parentDir_p->AddChild(string(name), ino);
-    
-    cout << "mkdir for " << ino << ". nlookup++" << endl;
-    dir_p->ReplyEntry(req);
+    long ino = do_create_node(parentDir_p, name, mode | S_IFDIR, 0, ctx_p);
+   
+    if (ino > 0) {
+        cout << "mkdir for " << ino << ". nlookup++" << endl;
+        Inodes[ino]->ReplyEntry(req);
+    } else {
+        fuse_reply_err(req, -ino);
+    }
 }
 
 void FuseRamFs::FuseUnlink(fuse_req_t req, fuse_ino_t parent, const char *name)
@@ -1087,8 +1105,6 @@ void FuseRamFs::FuseReadLink(fuse_req_t req, fuse_ino_t ino)
     
     //const struct fuse_ctx* ctx_p = fuse_req_ctx(req);
     
-    
-    // TODO: Is reply_entry only for directories? What about files?
     cout << "readlink for " << ino << endl;
     
     fuse_reply_readlink(req, link_p->Link().c_str());

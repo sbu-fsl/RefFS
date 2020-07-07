@@ -5,6 +5,8 @@
 #ifndef fuse_ram_fs_hpp
 #define fuse_ram_fs_hpp
 
+#include "directory.hpp"
+
 class FuseRamFs {
 private:
     static const size_t kReadDirEntriesPerResponse = 255;
@@ -24,6 +26,7 @@ public:
     static struct fuse_lowlevel_ops FuseOps;
     
 private:
+    static long do_create_node(Directory *parent, const char *name, mode_t mode, dev_t dev, const struct fuse_ctx *ctx);
     static fuse_ino_t RegisterInode(Inode *inode_p, mode_t mode, nlink_t nlink, gid_t gid, uid_t uid);
     static fuse_ino_t NextInode();
     
