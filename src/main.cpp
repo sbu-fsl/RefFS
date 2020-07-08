@@ -37,11 +37,14 @@ int main(int argc, const char * argv[]) {
     struct fuse_chan *ch;
     char *mountpoint;
     int err = -1;
+
+    std::srand(std::time(nullptr));
     
     // The core code for our filesystem.
     FuseRamFs core;
     
-    if (fuse_parse_cmdline(&args, &mountpoint, NULL, NULL) != -1) {
+    int mt = 1;
+    if (fuse_parse_cmdline(&args, &mountpoint, &mt, NULL) != -1) {
         if (mountpoint == NULL) {
             cerr << "USAGE: fuse-cpp-ramfs MOUNTPOINT" << endl;
         } else if ((ch = fuse_mount(mountpoint, &args)) != NULL) {

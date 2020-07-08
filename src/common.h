@@ -14,12 +14,14 @@
 #include <iostream>
 #include <stdexcept>
 #include <atomic>
+#include <unordered_map>
 
 #include <cstdio>
 #include <cstdlib>
 #include <cerrno>
 #include <cassert>
 #include <cstring>
+#include <ctime>
 
 #ifdef __APPLE__
 #include <osxfuse/fuse/fuse_lowlevel.h>

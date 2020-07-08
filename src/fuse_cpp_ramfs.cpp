@@ -324,8 +324,6 @@ void FuseRamFs::FuseReadDir(fuse_req_t req, fuse_ino_t ino, size_t size,
 {
     (void) fi;
    
-    map<string, fuse_ino_t>::const_iterator *childIterator = (map<string, fuse_ino_t>::const_iterator *) off;
-    
     Inode *inode = GetInode(ino);
     /* return ENOENT if this inode has been deleted */
     if (inode == nullptr || inode->HasNoLinks()) {
@@ -339,10 +337,10 @@ void FuseRamFs::FuseReadDir(fuse_req_t req, fuse_ino_t ino, size_t size,
         return;
     }
     
-    if (childIterator != NULL && *childIterator == dir->Children().end()) {
-        //delete childIterator;
-        // This is the case where we've been called after we've sent all the children. End
-        // with an empty buffer.
+    Directory::ReadDirCtx *ctx;
+    try {
+        ctx = dir->PrepareReaddir(off);
+    } catch (std::out_of_range &e) {
         fuse_reply_buf(req, NULL, 0);
         return;
     }
@@ -376,21 +374,18 @@ void FuseRamFs::FuseReadDir(fuse_req_t req, fuse_ino_t ino, size_t size,
     // childIterator hasn't been newed up yet.
     size_t bytesAdded = 0;
     size_t entriesAdded = 0;
-    if (childIterator == NULL) {
-        childIterator = new map<string, fuse_ino_t>::const_iterator(dir->Children().begin());
-    }
     
     while (entriesAdded < FuseRamFs::kReadDirEntriesPerResponse &&
-           *childIterator != dir->Children().end()) {
-        fuse_ino_t child_ino = (*childIterator)->second;
+           ctx->it != ctx->children.end()) {
+        fuse_ino_t child_ino = ctx->it->second;
         Inode *childInode = GetInode(child_ino);
         if (childInode == nullptr || childInode->HasNoLinks()) {
-            ++(*childIterator);
+            ++(ctx->it);
             continue;
         }
 
         childInode->GetAttr(&stbuf);
-        stbuf.st_ino = (*childIterator)->second;
+        stbuf.st_ino = ctx->it->second;
         
         // TODO: We don't look at sticky bits, etc. Revisit this in the future.
 //        Inode &childInode = Inodes[stbuf.st_ino];
@@ -404,22 +399,22 @@ void FuseRamFs::FuseReadDir(fuse_req_t req, fuse_ino_t ino, size_t size,
         bytesAdded += fuse_add_direntry(req,
                                         buf + bytesAdded,
                                         bufSize - bytesAdded,
-                                        (*childIterator)->first.c_str(),
+                                        ctx->it->first.c_str(),
                                         &stbuf,
-                                        (off_t) childIterator);
+                                        ctx->cookie);
         if (bytesAdded > bufSize) {
             // Oops. There wasn't enough space for that last item. Back up and exit.
-            --(*childIterator);
+            --(ctx->it);
             bytesAdded = oldSize;
             break;
         } else {
-            ++(*childIterator);
+            ++(ctx->it);
             ++entriesAdded;
         }
     }
 
     fuse_reply_buf(req, buf, bytesAdded);
-    free(buf);
+    std::free(buf);
 }
 
 void FuseRamFs::FuseOpen(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
@@ -889,11 +884,9 @@ void FuseRamFs::FuseRename(fuse_req_t req, fuse_ino_t parent, const char *name, 
         parentDir->RemoveChild(string(name));
         fuse_reply_err(req, 0);
     } else {
-        int err = newParentDir->AddChild(string(newname), srcIno);
-        assert(err != -EEXIST);
-        if (err == 0)
-            parentDir->RemoveChild(string(name));
-        fuse_reply_err(req, err);
+        newParentDir->AddChild(string(newname), srcIno);
+        parentDir->RemoveChild(string(name));
+        fuse_reply_err(req, 0);
     }
 }
 

@@ -14,6 +14,21 @@ private:
 
     void UpdateSize(ssize_t delta);
 public:
+    struct ReadDirCtx {
+        off_t cookie;
+        std::map<std::string, fuse_ino_t>::iterator it;
+        std::map<std::string, fuse_ino_t> children;
+        ReadDirCtx() {}
+        ReadDirCtx(off_t ck, std::map<std::string, fuse_ino_t> &ch)
+            : cookie(ck) {
+                children = ch;
+                it = children.begin();
+            }
+    };
+
+    static std::unordered_map<off_t, Directory::ReadDirCtx *> readdirStates;
+    ReadDirCtx* PrepareReaddir(off_t cookie);
+public:
     ~Directory() {}
 
     void Initialize(fuse_ino_t ino, mode_t mode, nlink_t nlink, gid_t gid, uid_t uid);

@@ -8,6 +8,7 @@
 #include "directory.hpp"
 
 using namespace std;
+std::unordered_map<off_t, Directory::ReadDirCtx *> Directory::readdirStates;
 
 void Directory::UpdateSize(ssize_t delta) {
     std::unique_lock<std::shared_mutex> lk(entryRwSem);
@@ -115,4 +116,34 @@ int Directory::WriteAndReply(fuse_req_t req, const char *buf, size_t size, off_t
 
 int Directory::ReadAndReply(fuse_req_t req, size_t size, off_t off) {
     return fuse_reply_err(req, EISDIR);
+}
+
+Directory::ReadDirCtx* Directory::PrepareReaddir(off_t cookie) {
+    if (cookie != 0) {
+        /* NOTE: Will throw std::out_of_range if no entry is found */
+        Directory::ReadDirCtx* ctx = readdirStates.at(cookie);
+
+        /* If we have reached the end of the iterator, we should destroy this context 
+         * to release memory */
+        if (ctx->it == ctx->children.end()) {
+            Directory::readdirStates.erase(cookie);
+            delete ctx;
+            throw(std::out_of_range("Not found"));
+        }
+        return ctx;
+    }
+    /* Make a copy of children */
+    std::shared_lock<std::shared_mutex> lk(childrenRwSem);
+    std::map<std::string, fuse_ino_t> copiedChildren(m_children);
+    lk.unlock();
+
+    /* Add it to the table */
+    cookie = rand();
+    /* Make sure there is no duplicate */
+    while (readdirStates.find(cookie) != readdirStates.end()) {
+        cookie = rand();
+    }
+    ReadDirCtx *newctx = new ReadDirCtx(cookie, copiedChildren);
+    readdirStates.insert({cookie, newctx});
+    return newctx;
 }
