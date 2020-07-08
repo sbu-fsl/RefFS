@@ -384,8 +384,10 @@ void FuseRamFs::FuseReadDir(fuse_req_t req, fuse_ino_t ino, size_t size,
            *childIterator != dir->Children().end()) {
         fuse_ino_t child_ino = (*childIterator)->second;
         Inode *childInode = GetInode(child_ino);
-        if (childInode == nullptr)
+        if (childInode == nullptr || childInode->HasNoLinks()) {
+            ++(*childIterator);
             continue;
+        }
 
         childInode->GetAttr(&stbuf);
         stbuf.st_ino = (*childIterator)->second;
@@ -645,7 +647,7 @@ void FuseRamFs::FuseUnlink(fuse_req_t req, fuse_ino_t parent, const char *name)
     
     // Return an error if the child doesn't exist.
     fuse_ino_t ino = parentDir_p->ChildInodeNumberWithName(string(name));
-    if (ino == -1) {
+    if (ino == INO_NOTFOUND) {
         fuse_reply_err(req, ENOENT);
         return;
     }
@@ -687,7 +689,7 @@ void FuseRamFs::FuseRmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
     
     // Return an error if the child doesn't exist.
     fuse_ino_t ino = parentDir_p->ChildInodeNumberWithName(string(name));
-    if (ino == -1) {
+    if (ino == INO_NOTFOUND) {
         fuse_reply_err(req, ENOENT);
         return;
     }
@@ -843,25 +845,23 @@ void FuseRamFs::FuseRename(fuse_req_t req, fuse_ino_t parent, const char *name, 
     
     // Return an error if the source doesn't exist.
     fuse_ino_t srcIno = parentDir->ChildInodeNumberWithName(string(name));
-    if (srcIno == INO_NOTFOUND) {
+    Inode *srcInode = GetInode(srcIno);
+    if (srcInode == nullptr || srcInode->HasNoLinks()) {
         fuse_reply_err(req, ENOENT);
         return;
     }
-
-    Inode *srcInode = GetInode(srcIno);
     
     // Look for an existing child with the same name in the new parent
     // directory
     fuse_ino_t existingIno = newParentDir->ChildInodeNumberWithName(string(newname));
-    Inode *existingInode = nullptr;
+    Inode *existingInode = GetInode(existingIno);
     /* If the newname (or destination) already exists, rename() should replace
      * the destination with the source.
      * HOWEVER, rename() will NOT replace if the destination is a non-empty
      * directory, or the destination is a directory while the source is not,
      * or the source is a directory but the dest is not.
      */
-    if (existingIno != INO_NOTFOUND) {
-        existingInode = GetInode(parent);
+    if (existingInode != nullptr && !existingInode->HasNoLinks()) {
         /* src is directory but dest is not: return ENOTDIR */
         if (S_ISDIR(srcInode->GetMode()) && !S_ISDIR(existingInode->GetMode())) {
             fuse_reply_err(req, ENOTDIR);
@@ -890,6 +890,7 @@ void FuseRamFs::FuseRename(fuse_req_t req, fuse_ino_t parent, const char *name, 
         fuse_reply_err(req, 0);
     } else {
         int err = newParentDir->AddChild(string(newname), srcIno);
+        assert(err != -EEXIST);
         if (err == 0)
             parentDir->RemoveChild(string(name));
         fuse_reply_err(req, err);

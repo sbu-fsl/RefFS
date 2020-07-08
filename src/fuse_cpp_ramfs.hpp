@@ -67,6 +67,7 @@ private:
         std::lock_guard<std::mutex> lk(deletedInodesMutex);
         fuse_ino_t ino = DeletedInodes.front();
         DeletedInodes.pop();
+        return ino;
     }
     
 public:
