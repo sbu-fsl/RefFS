@@ -20,10 +20,13 @@ int File::FileTruncate(size_t newSize) {
     /* Realloc if needed */
     if (newBlocks != oldBlocks) {
         void *newbuf = realloc(m_buf, newBlocks * File::BufBlockSize);
-        if (newbuf == nullptr) {
+        if (newbuf == nullptr && newBlocks > 0) {
             /* Probably because newsize exceeds limit;
              * return EINVAL in this case */
             return EINVAL;
+        }
+        if (newBlocks == 0) {
+            newbuf = nullptr;
         }
         m_buf = newbuf;
     }
