@@ -35,6 +35,7 @@ std::mutex FuseRamFs::deletedInodesMutex;
 struct statvfs FuseRamFs::m_stbuf = {};
 std::mutex FuseRamFs::stbufMutex;
 
+std::mutex FuseRamFs::renameMutex;
 /**
  All the supported filesystem operations mapped to object-methods.
  */
@@ -742,7 +743,7 @@ void FuseRamFs::FuseForget(fuse_req_t req, fuse_ino_t ino, unsigned long nlookup
     }
 
     inode_p->Forget(req, nlookup);
-    
+
     if (inode_p->Forgotten())
     {
         if (inode_p->HasNoLinks())
@@ -833,6 +834,10 @@ void FuseRamFs::FuseRename(fuse_req_t req, fuse_ino_t parent, const char *name, 
         fuse_reply_err(req, ENOTDIR);
         return;
     }
+
+    std::unique_lock<std::mutex> G(FuseRamFs::renameMutex, std::defer_lock);
+    std::unique_lock<std::shared_mutex> L1(parentDir->DirLock(), std::defer_lock);
+    std::unique_lock<std::shared_mutex> L2(newParentDir->DirLock(), std::defer_lock);
     
     // TODO: Handle permissions on dirs. You can't just rename anything you please!:
     //    else if ((fi->flags & 3) != O_RDONLY)
@@ -845,11 +850,27 @@ void FuseRamFs::FuseRename(fuse_req_t req, fuse_ino_t parent, const char *name, 
         fuse_reply_err(req, ENOENT);
         return;
     }
-    
+ 
+    /* Lock directories */
+    if (S_ISDIR(srcInode->GetMode())) {
+        if (parent == newparent) {
+            std::lock(G, L1);
+        } else {
+            std::lock(G, L1, L2);
+        }
+    } else {
+        if (parent == newparent) {
+            L1.lock();
+        } else {
+            std::lock(L1, L2);
+        }
+    }
+
     // Look for an existing child with the same name in the new parent
     // directory
-    fuse_ino_t existingIno = newParentDir->ChildInodeNumberWithName(string(newname));
+    fuse_ino_t existingIno = newParentDir->_ChildInodeNumberWithName(string(newname));
     Inode *existingInode = GetInode(existingIno);
+
     /* If the newname (or destination) already exists, rename() should replace
      * the destination with the source.
      * HOWEVER, rename() will NOT replace if the destination is a non-empty
@@ -860,11 +881,6 @@ void FuseRamFs::FuseRename(fuse_req_t req, fuse_ino_t parent, const char *name, 
         /* src is directory but dest is not: return ENOTDIR */
         if (S_ISDIR(srcInode->GetMode()) && !S_ISDIR(existingInode->GetMode())) {
             fuse_reply_err(req, ENOTDIR);
-            return;
-        }
-        /* Vise versa: return EISDIR */
-        if (!S_ISDIR(srcInode->GetMode()) && S_ISDIR(existingInode->GetMode())) {
-            fuse_reply_err(req, EISDIR);
             return;
         }
         /* If dest is a non-empty directory, return ENOTEMPTY */
@@ -878,14 +894,36 @@ void FuseRamFs::FuseRename(fuse_req_t req, fuse_ino_t parent, const char *name, 
                 return;
             }
         }
+        /* Vise versa: return EISDIR */
+        if (!S_ISDIR(srcInode->GetMode()) && S_ISDIR(existingInode->GetMode())) {
+            fuse_reply_err(req, EISDIR);
+            return;
+        }
+
         /* Otherwise, let's replace the existing dest */
-        newParentDir->UpdateChild(string(newname), srcIno);
+        newParentDir->_UpdateChild(string(newname), srcIno);
+        parentDir->_RemoveChild(string(name));
         existingInode->RemoveHardLink();
-        parentDir->RemoveChild(string(name));
+        if (S_ISDIR(existingInode->GetMode())) {
+            /* An empty dir has two hard links
+             * so we need to decrement one more time */
+            existingInode->RemoveHardLink();
+            /* Decrement one link for the old parent because the source
+             * dir has been moved out */
+            parentDir->RemoveHardLink();
+        }
         fuse_reply_err(req, 0);
     } else {
-        newParentDir->AddChild(string(newname), srcIno);
-        parentDir->RemoveChild(string(name));
+        /* If the destination does not exist */
+        newParentDir->_AddChild(string(newname), srcIno);
+        parentDir->_RemoveChild(string(name));
+        if (S_ISDIR(srcInode->GetMode())) {
+            /* Decrement one link for the old parent because the source
+             * dir has been moved out */
+            parentDir->RemoveHardLink();
+            /* Increment one link for the new parent because of moving in */
+            newParentDir->AddHardLink();
+        }
         fuse_reply_err(req, 0);
     }
 }

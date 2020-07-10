@@ -25,6 +25,8 @@ private:
     static std::mutex deletedInodesMutex;
     static struct statvfs m_stbuf;
     static std::mutex stbufMutex;
+
+    static std::mutex renameMutex;
     
 public:
     static struct fuse_lowlevel_ops FuseOps;
@@ -47,15 +49,6 @@ private:
         std::unique_lock<std::shared_mutex> writelk(inodesRwSem);
         Inodes.push_back(inode);
         return Inodes.size() - 1;
-    }
-
-    static Inode *GetInode(fuse_ino_t ino) {
-        std::shared_lock<std::shared_mutex> readlk(inodesRwSem);
-        try {
-            return Inodes.at(ino);
-        } catch (std::out_of_range e) {
-            return nullptr;
-        }
     }
 
     static void UpdateInode(fuse_ino_t ino, Inode *newInode) {
@@ -133,6 +126,15 @@ public:
     static void FsStat(struct statvfs *out) {
         std::lock_guard<std::mutex> lk(stbufMutex);
         *out = m_stbuf;
+    }
+
+    static Inode *GetInode(fuse_ino_t ino) {
+        std::shared_lock<std::shared_mutex> readlk(inodesRwSem);
+        try {
+            return Inodes.at(ino);
+        } catch (std::out_of_range e) {
+            return nullptr;
+        }
     }
 };
 
