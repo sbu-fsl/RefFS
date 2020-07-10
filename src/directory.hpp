@@ -32,22 +32,25 @@ public:
     ~Directory() {}
 
     void Initialize(fuse_ino_t ino, mode_t mode, nlink_t nlink, gid_t gid, uid_t uid);
+    fuse_ino_t _ChildInodeNumberWithName(const std::string &name);
     fuse_ino_t ChildInodeNumberWithName(const std::string &name);
+    int _AddChild(const std::string &name, fuse_ino_t);
     int AddChild(const std::string &name, fuse_ino_t);
+    int _UpdateChild(const std::string &name, fuse_ino_t ino);
     int UpdateChild(const std::string &name, fuse_ino_t ino);
+    int _RemoveChild(const std::string &name);
     int RemoveChild(const std::string &name);
     int WriteAndReply(fuse_req_t req, const char *buf, size_t size, off_t off);
     int ReadAndReply(fuse_req_t req, size_t size, off_t off);
 
     /* Atomic children operations */
-    bool IsEmpty() {
-        std::shared_lock<std::shared_mutex> lk(childrenRwSem);
-        return m_children.size() <= 2;
-    }
-    
+    bool IsEmpty();
+   
     /* NOTE: Not guarded, so accuracy is not guaranteed.
      * Mainly intended for readdir() method. */
     const std::map<std::string, fuse_ino_t> &Children() { return m_children; }
+
+    std::shared_mutex& DirLock() { return childrenRwSem; }
 };
 
 #endif /* directory_hpp */
