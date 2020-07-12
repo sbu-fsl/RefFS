@@ -14,8 +14,8 @@ private:
     static const size_t kReadDirEntriesPerResponse = 255;
     static const size_t kReadDirBufSize = 384;
     static const size_t kInodeReclamationThreshold = 256;
-    static const fsblkcnt_t kTotalBlocks = ~0;
-    static const fsfilcnt_t kTotalInodes = ~0;
+    static const fsblkcnt_t kTotalBlocks = 8388608;
+    static const fsfilcnt_t kTotalInodes = 1048576;
     static const unsigned long kFilesystemId = 0xc13f944870434d8f;
     static const size_t kMaxFilenameLength = 1024;
     
