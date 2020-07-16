@@ -550,7 +550,7 @@ void FuseRamFs::FuseMknod(fuse_req_t req, fuse_ino_t parent, const char *name,
  * @return: If successful, return the inode number of created node.
  *          Otherwise, return a negative error code.
  */
-long FuseRamFs::do_create_node(Directory *parent, const char *name, mode_t mode, dev_t dev, const struct fuse_ctx *ctx)
+long FuseRamFs::do_create_node(Directory *parent, const char *name, mode_t mode, dev_t dev, const struct fuse_ctx *ctx, const char *symlink)
 {
     Inode *new_node;
     nlink_t links = 1;
@@ -570,6 +570,11 @@ long FuseRamFs::do_create_node(Directory *parent, const char *name, mode_t mode,
             new_node = new SpecialInode(SPECIAL_INODE_FIFO);
         } else if (S_ISSOCK(mode)) {
             new_node = new SpecialInode(SPECIAL_INODE_SOCK);
+        } else if (S_ISLNK(mode)) {
+            if (symlink == nullptr) {
+                return -EINVAL;
+            }
+            new_node = new SymLink(std::string(symlink));
         } else {
             return -EINVAL;
         }
@@ -1024,6 +1029,14 @@ void FuseRamFs::FuseSymlink(fuse_req_t req, const char *link, fuse_ino_t parent,
         return;
     }
 
+    /* Check free space and free inodes */
+    if (FuseRamFs::CheckHasSpaceFor(nullptr, strnlen(name, PATH_MAX))) {
+        fuse_reply_err(req, ENOSPC);
+    }
+    if (FuseRamFs::GetFreeInodes() <= 0) {
+        fuse_reply_err(req, ENOSPC);
+    }
+
     /* We don't overwrite if name exists in parent directory */
     if (dir->ChildInodeNumberWithName(string(name)) != INO_NOTFOUND) {
         fuse_reply_err(req, EEXIST);
@@ -1035,14 +1048,15 @@ void FuseRamFs::FuseSymlink(fuse_req_t req, const char *link, fuse_ino_t parent,
     //        fuse_reply_err(req, EACCES);
     
     const struct fuse_ctx* ctx_p = fuse_req_ctx(req);
+
+    long ino = do_create_node(dir, name, 0777 | S_IFLNK, 0, ctx_p, link);
+
+    if (ino > 0) {
+        FuseRamFs::GetInode(ino)->ReplyEntry(req);
+    } else {
+        fuse_reply_err(req, -ino);
+    }
     
-    Inode *inode_p = new SymLink(string(link));
-    fuse_ino_t ino = RegisterInode(inode_p, S_IFLNK | 0777, 1, ctx_p->gid, ctx_p->uid);
-    
-    // Insert the inode into the directory. TODO: What if it already exists?
-    dir->AddChild(string(name), ino);
-    
-    inode_p->ReplyEntry(req);
 }
 
 void FuseRamFs::FuseReadLink(fuse_req_t req, fuse_ino_t ino)

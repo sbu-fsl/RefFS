@@ -33,7 +33,7 @@ public:
     static struct fuse_lowlevel_ops FuseOps;
     
 private:
-    static long do_create_node(Directory *parent, const char *name, mode_t mode, dev_t dev, const struct fuse_ctx *ctx);
+    static long do_create_node(Directory *parent, const char *name, mode_t mode, dev_t dev, const struct fuse_ctx *ctx, const char *symlink = nullptr);
     static fuse_ino_t RegisterInode(Inode *inode_p, mode_t mode, nlink_t nlink, gid_t gid, uid_t uid);
     static fuse_ino_t NextInode();
 
@@ -143,8 +143,14 @@ public:
         if (incSize <= 0) {
             return true;
         }
-        size_t oldBlocks = inode->UsedBlocks();
-        size_t newSize = inode->Size();
+        size_t oldBlocks, newSize;
+        if (inode) {
+            oldBlocks = inode->UsedBlocks();
+            newSize = inode->Size() + incSize;
+        } else {
+            oldBlocks = 0;
+            newSize = incSize;
+        }
         size_t newBlocks = get_nblocks(newSize, Inode::BufBlockSize);
         if (newBlocks <= oldBlocks) {
             return true;

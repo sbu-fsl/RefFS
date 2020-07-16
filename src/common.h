@@ -22,6 +22,7 @@
 #include <cassert>
 #include <cstring>
 #include <ctime>
+#include <climits>
 
 #ifdef __APPLE__
 #include <osxfuse/fuse/fuse_lowlevel.h>
