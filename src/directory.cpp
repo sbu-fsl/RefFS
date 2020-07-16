@@ -52,11 +52,15 @@ int Directory::_AddChild(const string &name, fuse_ino_t ino) {
     if (m_children.find(name) != m_children.end())
         return -EEXIST;
 
+    size_t elem_size = sizeof(_Rb_tree_node_base) + sizeof(fuse_ino_t) + sizeof(std::string) + name.size();
+    if (!FuseRamFs::CheckHasSpaceFor(this, elem_size)) {
+        return -ENOSPC;
+    }
+
     const auto [it, success] = m_children.insert({name, ino});
     if (!success)
         return -ENOMEM;
 
-    size_t elem_size = sizeof(_Rb_tree_node_base) + sizeof(fuse_ino_t) + sizeof(std::string) + name.size();
     UpdateSize(elem_size);
     return 0;
 }

@@ -7,7 +7,8 @@
 
 #include "common.h"
 #include "inode.hpp"
-#include "directory.hpp"
+
+class Directory;
 
 class FuseRamFs {
 private:
@@ -138,7 +139,7 @@ public:
     }
 
     /* Check if the file system can handle the increased size */
-    bool CheckHasSpaceFor(Inode *inode, ssize_t incSize) {
+    static bool CheckHasSpaceFor(Inode *inode, ssize_t incSize) {
         if (incSize <= 0) {
             return true;
         }
