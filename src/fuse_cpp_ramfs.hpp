@@ -153,6 +153,11 @@ public:
             return m_stbuf.f_bfree >= (newBlocks - oldBlocks);
         }
     }
+
+    static fsfilcnt_t GetFreeInodes() {
+        std::shared_lock<std::shared_mutex> lk(stbufMutex);
+        return m_stbuf.f_ffree;
+    }
 };
 
 #endif /* fuse_ram_fs_hpp */

@@ -512,6 +512,12 @@ void FuseRamFs::FuseMknod(fuse_req_t req, fuse_ino_t parent, const char *name,
         return;
     }
 
+    /* Check if the file system has free inode slots */
+    if (GetFreeInodes() <= 0) {
+        fuse_reply_err(req, ENOSPC);
+        return;
+    }
+
     /* Don't use an existing name */
     if (parentDir_p->ChildInodeNumberWithName(string(name)) != INO_NOTFOUND) {
         fuse_reply_err(req, EEXIST);
@@ -550,37 +556,58 @@ long FuseRamFs::do_create_node(Directory *parent, const char *name, mode_t mode,
     nlink_t links = 1;
 
     /* Create object based on mode */
-    if (S_ISREG(mode)) {
-        new_node = new File();
-    } else if (S_ISDIR(mode)) {
-        new_node = new Directory();
-        links = 2;
-    } else if (S_ISCHR(mode)) {
-        new_node = new SpecialInode(SPECIAL_INODE_CHAR_DEV, dev);
-    } else if (S_ISBLK(mode)) {
-        new_node = new SpecialInode(SPECIAL_INODE_BLOCK_DEV, dev);
-    } else if (S_ISFIFO(mode)) {
-        new_node = new SpecialInode(SPECIAL_INODE_FIFO);
-    } else if (S_ISSOCK(mode)) {
-        new_node = new SpecialInode(SPECIAL_INODE_SOCK);
-    } else {
-        return -EINVAL;
+    try {
+        if (S_ISREG(mode)) {
+            new_node = new File();
+        } else if (S_ISDIR(mode)) {
+            new_node = new Directory();
+            links = 2;
+        } else if (S_ISCHR(mode)) {
+            new_node = new SpecialInode(SPECIAL_INODE_CHAR_DEV, dev);
+        } else if (S_ISBLK(mode)) {
+            new_node = new SpecialInode(SPECIAL_INODE_BLOCK_DEV, dev);
+        } else if (S_ISFIFO(mode)) {
+            new_node = new SpecialInode(SPECIAL_INODE_FIFO);
+        } else if (S_ISSOCK(mode)) {
+            new_node = new SpecialInode(SPECIAL_INODE_SOCK);
+        } else {
+            return -EINVAL;
+        }
+    } catch (std::bad_alloc &e) {
+        return -ENOSPC;
+    }
+
+    if (GetFreeInodes() <= 0) {
+        return -ENOSPC;
     }
 
     /* Register the new inode into file system */
     fuse_ino_t ino = RegisterInode(new_node, mode, links, ctx->gid, ctx->uid);
+    int ret = 0;
 
     /* Special treatment for directories */
     if (S_ISDIR(mode)) {
         /* Initialize the new directory: Add '.' and '..' */
         Directory *dir_p = dynamic_cast<Directory *>(new_node);
-        dir_p->AddChild(string("."), ino);
-        dir_p->AddChild(string(".."), parent->GetIno());
-        parent->AddHardLink();
+        ret = dir_p->AddChild(string("."), ino);
+        ret = dir_p->AddChild(string(".."), parent->GetIno());
     }
 
     // Insert the new entry into the directory.
-    parent->AddChild(string(name), ino);
+    ret = parent->AddChild(string(name), ino);
+    /* If the first AddChild failed with ENOSPC/ENOMEM, the second one
+     * will certainly fail because the space is already run out */
+    if (ret < 0) {
+        FuseRamFs::UpdateUsedInodes(-1);
+        FuseRamFs::UpdateUsedBlocks(new_node->UsedBlocks());
+        delete new_node;
+        FuseRamFs::DeleteInode(ino);
+        return ret;
+    }
+    /* Only add hard link to the parent dir if everything above succeeded */
+    if (S_ISDIR(mode)) {
+        parent->AddHardLink();
+    }
     return ino;
 }
 
@@ -597,6 +624,11 @@ void FuseRamFs::FuseMkdir(fuse_req_t req, fuse_ino_t parent, const char *name, m
     Directory *parentDir_p = dynamic_cast<Directory *>(parentInode);
     if (parentDir_p == nullptr) {
         fuse_reply_err(req, ENOTDIR);
+        return;
+    }
+
+    if (GetFreeInodes() <= 0) {
+        fuse_reply_err(req, ENOSPC);
         return;
     }
 
@@ -1156,11 +1188,11 @@ fuse_ino_t FuseRamFs::RegisterInode(Inode *inode_p, mode_t mode, nlink_t nlink, 
     fuse_ino_t ino;
     if (DeletedInodes.empty()) {
         ino = FuseRamFs::AddInode(inode_p);
-        FuseRamFs::UpdateUsedInodes(1);
     } else {
         ino = PopOneDeletedInode();
         FuseRamFs::UpdateInode(ino, inode_p);
     }
+    FuseRamFs::UpdateUsedInodes(1);
 
     inode_p->Initialize(ino, mode, nlink, gid, uid);
     FuseRamFs::UpdateUsedBlocks(inode_p->UsedBlocks());
