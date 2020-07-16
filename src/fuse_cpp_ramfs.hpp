@@ -24,7 +24,7 @@ private:
     static std::queue<fuse_ino_t> DeletedInodes;
     static std::mutex deletedInodesMutex;
     static struct statvfs m_stbuf;
-    static std::mutex stbufMutex;
+    static std::shared_mutex stbufMutex;
 
     static std::mutex renameMutex;
     
@@ -114,17 +114,17 @@ public:
     static void FuseGetLock(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi, struct flock *lock);
     
     static void UpdateUsedBlocks(ssize_t blocksAdded) {
-        std::lock_guard<std::mutex> lk(stbufMutex);
+        std::unique_lock<std::shared_mutex> lk(stbufMutex);
         m_stbuf.f_bfree -= blocksAdded;
         m_stbuf.f_bavail -= blocksAdded;
     }
     static void UpdateUsedInodes(ssize_t inodesAdded) {
-        std::lock_guard<std::mutex> lk(stbufMutex);
+        std::unique_lock<std::shared_mutex> lk(stbufMutex);
         m_stbuf.f_ffree -= inodesAdded;
         m_stbuf.f_favail -= inodesAdded;
     }
     static void FsStat(struct statvfs *out) {
-        std::lock_guard<std::mutex> lk(stbufMutex);
+        std::shared_lock<std::shared_mutex> lk(stbufMutex);
         *out = m_stbuf;
     }
 
@@ -134,6 +134,22 @@ public:
             return Inodes.at(ino);
         } catch (std::out_of_range e) {
             return nullptr;
+        }
+    }
+
+    /* Check if the file system can handle the increased size */
+    bool CheckHasSpaceFor(Inode *inode, ssize_t incSize) {
+        if (incSize <= 0) {
+            return true;
+        }
+        size_t oldBlocks = inode->UsedBlocks();
+        size_t newSize = inode->Size();
+        size_t newBlocks = get_nblocks(newSize, Inode::BufBlockSize);
+        if (newBlocks <= oldBlocks) {
+            return true;
+        } else {
+            std::shared_lock<std::shared_mutex> lk(stbufMutex);
+            return m_stbuf.f_bfree >= (newBlocks - oldBlocks);
         }
     }
 };

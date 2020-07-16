@@ -33,7 +33,7 @@ std::mutex FuseRamFs::deletedInodesMutex;
  The constants defining the capabilities and sizes of the filesystem.
  */
 struct statvfs FuseRamFs::m_stbuf = {};
-std::mutex FuseRamFs::stbufMutex;
+std::shared_mutex FuseRamFs::stbufMutex;
 
 std::mutex FuseRamFs::renameMutex;
 /**
