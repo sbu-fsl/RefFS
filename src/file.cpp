@@ -17,6 +17,10 @@ int File::FileTruncate(size_t newSize) {
     size_t oldBlocks = Inode::UsedBlocks();
     size_t oldSize = Inode::Size();
 
+    if (!FuseRamFs::CheckHasSpaceFor(this, newSize - oldSize)) {
+        return -ENOSPC;
+    }
+
     /* Realloc if needed */
     if (newBlocks != oldBlocks) {
         void *newbuf = realloc(m_buf, newBlocks * File::BufBlockSize);
@@ -56,11 +60,14 @@ int File::FileTruncate(size_t newSize) {
 int File::WriteAndReply(fuse_req_t req, const char *buf, size_t size, off_t off) {
     // Allocate more memory if we don't have space.
     size_t newSize = off + size;
-    size_t originalCapacity = Inode::BufBlockSize * m_fuseEntryParam.attr.st_blocks;
+    size_t originalCapacity = Inode::BufBlockSize * File::UsedBlocks();
     size_t newBlocks = newSize/Inode::BufBlockSize + (newSize % Inode::BufBlockSize != 0);
 
     /* Request for more memory if write() expands the file */
     if (newSize > originalCapacity) {
+        if (!FuseRamFs::CheckHasSpaceFor(this, newSize - File::Size())) {
+            return fuse_reply_err(req, ENOSPC);
+        }
         void *newBuf = realloc(m_buf, newBlocks * Inode::BufBlockSize);
         // If we ran out of memory, let the caller know that no bytes were
         // written.
