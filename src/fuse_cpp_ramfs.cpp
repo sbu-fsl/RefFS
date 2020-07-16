@@ -754,7 +754,8 @@ void FuseRamFs::FuseForget(fuse_req_t req, fuse_ino_t ino, unsigned long nlookup
             /* Atomically erase the record in inodes table and
              * push this ino to the DeletedInodes list */
             DeleteInode(ino);
-            FuseRamFs::UpdateUsedInodes(-blocks_freed);
+            FuseRamFs::UpdateUsedInodes(-1);
+            FuseRamFs::UpdateUsedBlocks(-blocks_freed);
         }
         else
         {
