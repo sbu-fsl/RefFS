@@ -578,6 +578,7 @@ long FuseRamFs::do_create_node(Directory *parent, const char *name, mode_t mode,
     }
 
     if (GetFreeInodes() <= 0) {
+        delete new_node;
         return -ENOSPC;
     }
 
@@ -991,10 +992,15 @@ void FuseRamFs::FuseLink(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent, c
     if (existingIno != INO_NOTFOUND) {
         // There's already a child with that name. Return an error.
         fuse_reply_err(req, EEXIST);
+        return;
     }
     
     // Create the new name and point it to the inode.
-    parentDir->AddChild(string(newname), ino);
+    int ret = parentDir->AddChild(string(newname), ino);
+    if (ret < 0) {
+        fuse_reply_err(req, -ret);
+        return;
+    }
     
     // Update the number of hardlinks in the target
     src->AddHardLink();
@@ -1163,16 +1169,12 @@ void FuseRamFs::FuseCreate(fuse_req_t req, fuse_ino_t parent, const char *name, 
     
     const struct fuse_ctx* ctx_p = fuse_req_ctx(req);
     
-    Inode *inode_p = new File();
-
-    // TODO: It looks like, according to the documentation, that this will never be called to
-    // make a dir--only a file. Test to make sure this is true.
-    fuse_ino_t ino = RegisterInode(inode_p, mode, 1, ctx_p->gid, ctx_p->uid);
-    
-    // Insert the inode into the directory. TODO: What if it already exists?
-    parentDir_p->AddChild(string(name), ino);
-    
-    inode_p->ReplyCreate(req, fi);
+    long ino = do_create_node(parentDir_p, name, mode | S_IFREG, 0, ctx_p);
+    if (ino > 0) {
+        FuseRamFs::GetInode(ino)->ReplyCreate(req, fi);
+    } else {
+        fuse_reply_err(req, -ino);
+    }
 }
 
 void FuseRamFs::FuseGetLock(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi, struct flock *lock)
