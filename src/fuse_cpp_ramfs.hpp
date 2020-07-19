@@ -65,7 +65,7 @@ private:
     }
     
 public:
-    FuseRamFs();
+    FuseRamFs(fsblkcnt_t blocks = 0, fsfilcnt_t inodes = 0);
     ~FuseRamFs();
     
     static void FuseInit(void *userdata, struct fuse_conn_info *conn);

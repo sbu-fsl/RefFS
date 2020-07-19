@@ -42,7 +42,7 @@ std::mutex FuseRamFs::renameMutex;
 struct fuse_lowlevel_ops FuseRamFs::FuseOps = {};
 
 
-FuseRamFs::FuseRamFs()
+FuseRamFs::FuseRamFs(fsblkcnt_t blocks, fsfilcnt_t inodes)
 {
     FuseOps.init        = FuseRamFs::FuseInit;
     FuseOps.destroy     = FuseRamFs::FuseDestroy;
@@ -77,16 +77,22 @@ FuseRamFs::FuseRamFs()
     FuseOps.create      = FuseRamFs::FuseCreate;
     FuseOps.getlk       = FuseRamFs::FuseGetLock;
     
+    if (blocks <= 0) {
+        blocks = kTotalBlocks;
+    }
+    if (inodes <= 0) {
+        inodes = kTotalInodes;
+    }
     /* No need for locking because no other threads should
      * be accessing these attributes during construction */
     m_stbuf.f_bsize   = Inode::BufBlockSize;   /* File system block size */
     m_stbuf.f_frsize  = Inode::BufBlockSize;   /* Fundamental file system block size */
-    m_stbuf.f_blocks  = kTotalBlocks;          /* Blocks on FS in units of f_frsize */
-    m_stbuf.f_bfree   = kTotalBlocks;          /* Free blocks */
-    m_stbuf.f_bavail  = kTotalBlocks;          /* Blocks available to non-root */
-    m_stbuf.f_files   = kTotalInodes;          /* Total inodes */
-    m_stbuf.f_ffree   = kTotalInodes;          /* Free inodes */
-    m_stbuf.f_favail  = kTotalInodes;          /* Free inodes for non-root */
+    m_stbuf.f_blocks  = blocks;                /* Blocks on FS in units of f_frsize */
+    m_stbuf.f_bfree   = blocks;                /* Free blocks */
+    m_stbuf.f_bavail  = blocks;                /* Blocks available to non-root */
+    m_stbuf.f_files   = inodes;                /* Total inodes */
+    m_stbuf.f_ffree   = inodes;                /* Free inodes */
+    m_stbuf.f_favail  = inodes;                /* Free inodes for non-root */
     m_stbuf.f_fsid    = kFilesystemId;         /* Filesystem ID */
     m_stbuf.f_flag    = 0;                     /* Bit mask of values */
     m_stbuf.f_namemax = kMaxFilenameLength;    /* Max file name length */
