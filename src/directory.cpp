@@ -15,11 +15,19 @@ void Directory::UpdateSize(ssize_t delta) {
     std::unique_lock<std::shared_mutex> lk(entryRwSem);
 
     /* Avoid negative result */
-    if (delta < 0 && -delta > m_fuseEntryParam.attr.st_size)
-        delta = m_fuseEntryParam.attr.st_size;
+    if (delta < 0 && -delta > m_fuseEntryParam.attr.st_size) {
+        printf("Directory::UpdateSize(): %ld of delta causes negative size.\n", delta);
+        assert(0);
+    }
 
-    m_fuseEntryParam.attr.st_size += delta;
-    m_fuseEntryParam.attr.st_blocks = get_nblocks(m_fuseEntryParam.attr.st_size, Inode::BufBlockSize);
+    size_t oldBlocks = m_fuseEntryParam.attr.st_blocks;
+    size_t newSize = m_fuseEntryParam.attr.st_size + delta;
+    size_t newBlocks = get_nblocks(newSize, Inode::BufBlockSize);
+    m_fuseEntryParam.attr.st_size = newSize;
+    if (newBlocks != oldBlocks) {
+        m_fuseEntryParam.attr.st_blocks = newBlocks;
+        FuseRamFs::UpdateUsedBlocks(newBlocks - oldBlocks);
+    }
 }
 
 void Directory::Initialize(fuse_ino_t ino, mode_t mode, nlink_t nlink, gid_t gid, uid_t uid) {
