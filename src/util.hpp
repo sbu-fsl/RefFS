@@ -14,6 +14,11 @@
 #endif
 #define OPTION_MAX      MAX_ARG_STRLEN
 
+/* Make sure strtok_r() exists */
+#if !defined(_POSIX_C_SOURCE) && !defined(_BSD_SOURCE) && !defined(_SVID_SOURCE)
+#error strtok_r is not available on your system. Please check your glibc version
+#endif
+
 struct fuse_ramfs_options {
     size_t capacity;
     size_t inodes;
