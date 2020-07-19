@@ -121,6 +121,7 @@ char *ramfs_parse_options(char *optstr, struct fuse_ramfs_options &opt) {
                 *(ptr++) = '=';
                 size_t valen = strnlen(value, OPTION_MAX);
                 strncpy(ptr, value, valen);
+                ptr += valen;
             }
             *(ptr++) = ',';
         }
