@@ -14,6 +14,15 @@
 #endif
 #define OPTION_MAX      MAX_ARG_STRLEN
 
+struct fuse_ramfs_options {
+    size_t capacity;
+    size_t inodes;
+    bool deamonize;
+    char *subtype;
+    char *mountpoint;
+    char *_optstr;
+};
+
 // TODO: This looks like it was required before. Perhaps Sierra now includes it.
 //#ifdef __MACH__
 //#define CLOCK_REALTIME 0
