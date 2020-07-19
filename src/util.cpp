@@ -139,6 +139,18 @@ char *ramfs_parse_options(char *optstr, struct fuse_ramfs_options &opt) {
     return newopt;
 }
 
+void ramfs_set_subtype(struct fuse_args *args, const char *subtype) {
+    /* Let it crash if std::bad_alloc occurred */
+    size_t len = strnlen(subtype, OPTION_MAX) + 32;
+    char *subtype_str = new char[len];
+    if (subtype_str == nullptr) {
+        printf("Cannot allocate memory.\n");
+        exit(2);
+    }
+    snprintf(subtype_str, len, "-osubtype=%s\n", subtype);
+    fuse_opt_add_arg(args, subtype_str);
+}
+
 void erase_arg(struct fuse_args &args, int index) {
     if (index >= args.argc) {
         return;
