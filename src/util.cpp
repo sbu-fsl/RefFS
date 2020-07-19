@@ -6,6 +6,7 @@
 #include <cstring>
 #include <cstdio>
 #include <cstdlib>
+#include "common.h"
 
 // TODO: This looks like it was required before. Perhaps Sierra now includes it.
 //#ifdef __MACH__
@@ -136,4 +137,74 @@ char *ramfs_parse_options(char *optstr, struct fuse_ramfs_options &opt) {
     }
 
     return newopt;
+}
+
+void erase_arg(struct fuse_args &args, int index) {
+    if (index >= args.argc) {
+        return;
+    }
+
+    char *target = args.argv[index];
+    for (int i = index; i < args.argc - 1; ++i) {
+        args.argv[i] = args.argv[i+1];
+    }
+    args.argv[args.argc - 1] = nullptr;
+    args.argc--;
+    if (args.allocated) {
+        delete target;
+    }
+}
+/* ramfs_parse_cmdline: Parse command line arguments
+ * 
+ * @params[in,out] args: CMD arguments wrapped in fuse_args
+ * @params[out]    options: RAM file system config structure
+ * 
+ * NOTE: After parsing this function will remove parsed arguments
+ *       from args except '-o [options]'
+ */
+void ramfs_parse_cmdline(struct fuse_args &args, struct fuse_ramfs_options &options) {
+    int opt, argidx = 0;
+    size_t optlen; 
+    char *optstr_buf;
+    while ((opt = getopt(args.argc, args.argv, "o:b")) != -1) {
+        switch (opt) {
+            case 'o':
+                optlen = strnlen(optarg, OPTION_MAX) + 1;
+                optstr_buf = new char[optlen];
+                strncpy(optstr_buf, optarg, optlen);
+                options._optstr = ramfs_parse_options(optstr_buf, options);
+                if (args.allocated) {
+                    delete args.argv[optind - 1];
+                }
+                args.argv[optind - 1] = options._optstr;
+                break;
+
+            case 'b':
+                options.deamonize = true;
+                printf("Elected to deamonize fuse-cpp-ramfs\n");
+                erase_arg(args, optind - 1);
+                break;
+
+            default:
+                continue;
+        }
+    }
+    if (optind >= args.argc) {
+        printf("Missing mountpoint.\n");
+        exit(1);
+    } else if (optind == args.argc - 1) {
+        size_t mplen = strnlen(args.argv[optind], OPTION_MAX) + 1;
+        char *mp = new char[mplen];
+        strncpy(mp, args.argv[optind], mplen);
+        options.mountpoint = mp;
+        if (options.subtype == nullptr) {
+            options.subtype = basename(args.argv[0]);
+            ramfs_set_subtype(&args, options.subtype);
+        }
+    } else {
+        printf("Too many arguments?\n");
+        exit(1);
+    }
+    printf("Mount name: %s\n", options.subtype);
+    printf("Mountpoint path: %s\n", options.mountpoint);
 }
