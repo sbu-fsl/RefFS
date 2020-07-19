@@ -39,5 +39,6 @@ static inline size_t get_nblocks(size_t size, size_t blocksize) {
 }
 
 size_t SizeStr2Number(const char *str);
+char *ramfs_parse_options(char *optstr, struct fuse_ramfs_options &opt);
 
 #endif /* util_hpp */
