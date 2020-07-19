@@ -6,8 +6,13 @@
 #define util_hpp
 
 #include <sys/types.h>
+#include <linux/binfmts.h>
 
 #define INO_NOTFOUND    (fuse_ino_t) 0
+#ifndef PAGE_SIZE
+#define PAGE_SIZE       4096
+#endif
+#define OPTION_MAX      MAX_ARG_STRLEN
 
 // TODO: This looks like it was required before. Perhaps Sierra now includes it.
 //#ifdef __MACH__
@@ -23,5 +28,7 @@ static inline size_t round_up(size_t value, size_t unit) {
 static inline size_t get_nblocks(size_t size, size_t blocksize) {
         return (size + blocksize - 1) / blocksize;
 }
+
+size_t SizeStr2Number(const char *str);
 
 #endif /* util_hpp */
