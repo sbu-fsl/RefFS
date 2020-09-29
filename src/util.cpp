@@ -125,6 +125,10 @@ char *ramfs_parse_options(char *optstr, struct fuse_ramfs_options &opt) {
              * them into the newopt buffer for future use (e.g. fuse_mount)
              */
             size_t keylen = strnlen(key, OPTION_MAX);
+            /* If the cursor of newopt buffer is not at the beginning,
+             * add comma */
+            if (ptr > newopt)
+              *(ptr++) = ',';
             strncpy(ptr, key, keylen);
             ptr += keylen;
             if (value) {
@@ -133,7 +137,6 @@ char *ramfs_parse_options(char *optstr, struct fuse_ramfs_options &opt) {
                 strncpy(ptr, value, valen);
                 ptr += valen;
             }
-            *(ptr++) = ',';
         }
         kvtoken = strtok_r(nullptr, ",", &ctx1);
     }
