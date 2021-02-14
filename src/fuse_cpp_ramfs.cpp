@@ -76,6 +76,7 @@ FuseRamFs::FuseRamFs(fsblkcnt_t blocks, fsfilcnt_t inodes)
     FuseOps.access      = FuseRamFs::FuseAccess;
     FuseOps.create      = FuseRamFs::FuseCreate;
     FuseOps.getlk       = FuseRamFs::FuseGetLock;
+    FuseOps.ioctl       = FuseRamFs::FuseIoctl;
     
     if (blocks <= 0) {
         blocks = kTotalBlocks;
@@ -101,6 +102,105 @@ FuseRamFs::FuseRamFs(fsblkcnt_t blocks, fsfilcnt_t inodes)
 FuseRamFs::~FuseRamFs()
 {
 
+}
+
+int FuseRamFs::checkpoint(uint64_t key)
+{
+    // Lock
+
+    int ret = 0;
+    // inode total size
+    /*
+    size_t inodes_size = 0;
+    for (std::vector<Inode *>::iterator it = Inodes.begin() ; it != Inodes.end(); ++it)
+    {
+        inodes_size += (*it)->Size();
+    }
+
+    Inode *copied_files = (Inode *)malloc(inodes_size);
+    */
+    std::vector <Inode *> copied_files (Inodes.size());
+
+    std::copy(Inodes.begin(), Inodes.end(), copied_files.begin());
+
+    mode_t inode_mode;
+    Inode *each_inode;
+    for (unsigned i = 0; i < copied_files.size(); i++)
+    {
+        each_inode = copied_files[i];
+        inode_mode = each_inode->m_fuseEntryParam.attr.st_mode;
+        if (S_ISREG(inode_mode)){
+            each_inode = dynamic_cast<File *>(each_inode);
+            each_inode->m_buf = NULL;
+            size_t datasz = each_inode->UsedBlocks() * each_inode->BufBlockSize;
+            void *fdata = malloc(datasz);
+            if (!fdata) {
+                ret = -ENOMEM;
+                goto err;
+            }
+            memcpy(fdata, dynamic_cast<File *>(Inodes[i])->m_buf, datasz);
+            each_inode->m_buf = fdata;
+        } else if (S_ISDIR(inode_mode)) {
+            each_inode = dynamic_cast<Directory *>(each_inode);
+        } else if (S_ISCHR(inode_mode) || S_ISBLK(inode_mode) || S_ISFIFO(inode_mode) || S_ISSOCK(inode_mode)) {
+            each_inode = dynamic_cast<SpecialInode *>(each_inode);
+        } else if (S_ISLNK(inode_mode)) {
+            each_inode = dynamic_cast<SymLink *>(each_inode);
+        }
+        else{
+            ret = -ENOSYS;
+            goto err;
+        }
+        if (each_inode == NULL){
+            ret = -EBADF;
+            goto err;
+        }
+    }
+    // insert state
+    ret = insert_state(key, copied_files);
+    return ret;
+err:
+    // clear copied_files vector
+    std::vector<Inode *>().swap(copied_files);
+    // Unlock
+    return ret;
+}
+
+void FuseRamFs::invalidate_kernel_states()
+{
+}
+
+
+int FuseRamFs::restore(uint64_t key)
+{
+    // Lock
+    
+    
+}
+
+void FuseRamFs::FuseIoctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
+                        struct fuse_file_info *fi, unsigned flags,
+                        const void *in_buf, size_t in_bufsz, size_t out_bufsz)
+{
+    int ret;
+    switch (cmd){
+        case VERIFS2_CHECKPOINT:
+            ret = checkpoint((uint64_t)arg);
+            break;
+        
+        case VERIFS2_RESTORE:
+            ret = restore((uint64_t)arg);
+            break;
+        
+        default:
+            ret = ENOTSUP;
+            break;
+    }
+    if (ret == 0) {
+        fuse_reply_ioctl(req, 0, NULL, 0);
+    } else {
+        fuse_reply_err(req, -ret);
+    }
 }
 
 

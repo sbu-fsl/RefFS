@@ -7,6 +7,7 @@
 
 #include "common.h"
 #include "inode.hpp"
+#include "cr.hpp"
 
 class Directory;
 
@@ -36,6 +37,9 @@ private:
     static long do_create_node(Directory *parent, const char *name, mode_t mode, dev_t dev, const struct fuse_ctx *ctx, const char *symlink = nullptr);
     static fuse_ino_t RegisterInode(Inode *inode_p, mode_t mode, nlink_t nlink, gid_t gid, uid_t uid);
     static fuse_ino_t NextInode();
+    static int checkpoint(uint64_t key);
+    static void invalidate_kernel_states();
+    static int restore(uint64_t key);
 
     /* Atomic inode table operations */
     static void DeleteInode(fuse_ino_t ino) {
@@ -95,6 +99,7 @@ public:
     static void FuseSymlink(fuse_req_t req, const char *link, fuse_ino_t parent, const char *name);
     static void FuseReadLink(fuse_req_t req, fuse_ino_t ino);
     static void FuseStatfs(fuse_req_t req, fuse_ino_t ino);
+    static void FuseIoctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg, struct fuse_file_info *fi, unsigned flags, const void *in_buf, size_t in_bufsz, size_t out_bufsz);
 
 #ifdef __APPLE__
     static void FuseSetXAttr(fuse_req_t req, fuse_ino_t ino, const char *name, const char *value, size_t size, int flags, uint32_t position);

@@ -6,7 +6,7 @@
 #define file_hpp
 
 class File : public Inode {
-private:
+public:
     void *m_buf;
     
 public:

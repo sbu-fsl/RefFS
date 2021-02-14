@@ -13,12 +13,12 @@ private:
     std::atomic_ulong m_nlookup;
 
 protected:
-    struct fuse_entry_param m_fuseEntryParam;
     std::shared_mutex entryRwSem;
     std::map<std::string, std::pair<void *, size_t> > m_xattr;
     std::shared_mutex xattrRwSem;
     
 public:
+    struct fuse_entry_param m_fuseEntryParam;
     static const size_t BufBlockSize = 512;
     
 public:
