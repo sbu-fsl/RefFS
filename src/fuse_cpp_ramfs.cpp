@@ -109,51 +109,30 @@ int FuseRamFs::checkpoint(uint64_t key)
     // Lock
 
     int ret = 0;
-    // inode total size
-    /*
-    size_t inodes_size = 0;
-    for (std::vector<Inode *>::iterator it = Inodes.begin() ; it != Inodes.end(); ++it)
-    {
-        inodes_size += (*it)->Size();
-    }
-
-    Inode *copied_files = (Inode *)malloc(inodes_size);
-    */
     std::vector <Inode *> copied_files (Inodes.size());
 
     std::copy(Inodes.begin(), Inodes.end(), copied_files.begin());
 
     mode_t inode_mode;
-    Inode *each_inode;
+    File *file_inode;
     for (unsigned i = 0; i < copied_files.size(); i++)
     {
-        each_inode = copied_files[i];
-        inode_mode = each_inode->m_fuseEntryParam.attr.st_mode;
+        inode_mode = copied_files[i]->m_fuseEntryParam.attr.st_mode;
         if (S_ISREG(inode_mode)){
-            each_inode = dynamic_cast<File *>(each_inode);
-            each_inode->m_buf = NULL;
-            size_t datasz = each_inode->UsedBlocks() * each_inode->BufBlockSize;
+            file_inode = dynamic_cast<File *>(copied_files[i]);
+            if (file_inode == NULL){
+                ret = -EBADF;
+                goto err;
+            }
+            file_inode->m_buf = NULL;
+            size_t datasz = file_inode->UsedBlocks() * file_inode->BufBlockSize;
             void *fdata = malloc(datasz);
             if (!fdata) {
                 ret = -ENOMEM;
                 goto err;
             }
             memcpy(fdata, dynamic_cast<File *>(Inodes[i])->m_buf, datasz);
-            each_inode->m_buf = fdata;
-        } else if (S_ISDIR(inode_mode)) {
-            each_inode = dynamic_cast<Directory *>(each_inode);
-        } else if (S_ISCHR(inode_mode) || S_ISBLK(inode_mode) || S_ISFIFO(inode_mode) || S_ISSOCK(inode_mode)) {
-            each_inode = dynamic_cast<SpecialInode *>(each_inode);
-        } else if (S_ISLNK(inode_mode)) {
-            each_inode = dynamic_cast<SymLink *>(each_inode);
-        }
-        else{
-            ret = -ENOSYS;
-            goto err;
-        }
-        if (each_inode == NULL){
-            ret = -EBADF;
-            goto err;
+            file_inode->m_buf = fdata;
         }
     }
     // insert state
@@ -174,8 +153,46 @@ void FuseRamFs::invalidate_kernel_states()
 int FuseRamFs::restore(uint64_t key)
 {
     // Lock
-    
-    
+    std::vector <Inode *> stored_files = find_state(key);
+    std::vector <Inode *> newfiles (stored_files.size());
+    int ret = 0;
+    if (stored_files.empty()){
+        ret = -ENOENT;
+        goto err;
+    }
+
+    copy(stored_files.begin(), stored_files.end(), newfiles.begin());
+    mode_t inode_mode;
+    File* file_inode;
+    for (std::vector<Inode *>::iterator it = newfiles.begin() ; it != newfiles.end(); ++it)
+    {
+        inode_mode = (*it)->m_fuseEntryParam.attr.st_mode;
+        if (S_ISREG(inode_mode)){
+            dynamic_cast<File *>(*it)->m_buf = NULL;
+        }
+    }
+
+    for (unsigned i = 0; i < newfiles.size(); i++)
+    {
+        inode_mode = (newfiles[i])->m_fuseEntryParam.attr.st_mode;
+        if (S_ISREG(inode_mode)){
+            file_inode = dynamic_cast<File *>(newfiles[i]);
+            size_t dsize = file_inode->UsedBlocks() * file_inode->BufBlockSize;
+            void *fdata = malloc(dsize);
+            if (!fdata) {
+                ret = -ENOMEM;
+                goto err;
+            }
+            memcpy(fdata, dynamic_cast<File *>(stored_files[i])->m_buf, dsize);
+            file_inode->m_buf = fdata;
+        }
+    }
+    std::vector<Inode *>().swap(stored_files);
+    remove_state(key);
+    return 0;
+err:
+    std::vector<Inode *>().swap(newfiles);
+    return ret;
 }
 
 void FuseRamFs::FuseIoctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
@@ -239,6 +256,9 @@ void FuseRamFs::FuseInit(void *userdata, struct fuse_conn_info *conn)
     fuse_ino_t rootno = RegisterInode(root, S_IFDIR | 0777, 3, gid, uid);
     root->AddChild(string("."), rootno);
     root->AddChild(string(".."), rootno);
+
+    /* Enable ioctl on directory */
+    conn->want |= FUSE_CAP_IOCTL_DIR;
 }
 
 
