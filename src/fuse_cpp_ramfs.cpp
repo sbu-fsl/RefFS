@@ -111,28 +111,68 @@ int FuseRamFs::checkpoint(uint64_t key)
     int ret = 0;
     std::vector <Inode *> copied_files (Inodes.size());
 
-    std::copy(Inodes.begin(), Inodes.end(), copied_files.begin());
+    //std::copy(Inodes.begin(), Inodes.end(), copied_files.begin());
 
     mode_t inode_mode;
-    File *file_inode;
-    for (unsigned i = 0; i < copied_files.size(); i++)
+
+    File *file_inode_old;
+    Directory *dir_inode_old;
+    SpecialInode *special_inode_old;
+    SymLink *symlink_inode_old;
+
+    for (unsigned i = 0; i < Inodes.size(); i++)
     {
-        inode_mode = copied_files[i]->m_fuseEntryParam.attr.st_mode;
+        inode_mode = Inodes[i]->m_fuseEntryParam.attr.st_mode;
         if (S_ISREG(inode_mode)){
-            file_inode = dynamic_cast<File *>(copied_files[i]);
-            if (file_inode == NULL){
+            file_inode_old = dynamic_cast<File *>(Inodes[i]);
+            if (file_inode_old == NULL){
                 ret = -EBADF;
                 goto err;
             }
-            file_inode->m_buf = NULL;
-            size_t datasz = file_inode->UsedBlocks() * file_inode->BufBlockSize;
+
+            File *file_inode_copy = new File(*file_inode_old);
+            copied_files.push_back((Inode*) file_inode_copy);
+
+            file_inode_old->m_buf = NULL;
+            size_t datasz = file_inode_old->UsedBlocks() * file_inode_old->BufBlockSize;
             void *fdata = malloc(datasz);
             if (!fdata) {
                 ret = -ENOMEM;
                 goto err;
             }
             memcpy(fdata, dynamic_cast<File *>(Inodes[i])->m_buf, datasz);
-            file_inode->m_buf = fdata;
+            file_inode_copy->m_buf = fdata;
+        } else if (S_ISDIR(inode_mode)) {
+            dir_inode_old = dynamic_cast<Directory *>(Inodes[i]);
+            if (dir_inode_old == NULL){
+                ret = -EBADF;
+                goto err;
+            }
+
+            Directory *dir_copy = new Directory(*dir_inode_old);
+            copied_files.push_back((Inode*) dir_copy);
+        } else if (S_ISCHR(inode_mode) || S_ISBLK(inode_mode) || S_ISFIFO(inode_mode) || S_ISSOCK(inode_mode)) {
+            special_inode_old = dynamic_cast<SpecialInode *>(Inodes[i]);
+            if (special_inode_old == NULL){
+                ret = -EBADF;
+                goto err;
+            }
+
+            SpecialInode *special_inode_copy = new SpecialInode(*special_inode_old);
+            copied_files.push_back((Inode*) special_inode_copy);
+        } else if (S_ISLNK(inode_mode)) {
+            symlink_inode_old = dynamic_cast<SymLink *>(Inodes[i]);
+            if (symlink_inode_old == NULL){
+                ret = -EBADF;
+                goto err;
+            }
+
+            SymLink *symlink_inode_copy = new SymLink(*symlink_inode_old);
+            copied_files.push_back((Inode*) symlink_inode_copy);
+        }
+        else {
+            ret = -EINVAL;
+            goto err;
         }
     }
     // insert state

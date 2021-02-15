@@ -10,8 +10,9 @@ private:
     std::string m_link;
     
 public:
+    SymLink(const SymLink& obj) {};
     SymLink(const std::string &link) :
-    m_link(link) {}
+    m_link(link) {};
     
     ~SymLink() {};
     

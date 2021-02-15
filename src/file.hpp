@@ -10,6 +10,7 @@ private:
     void *m_buf;
     
 public:
+    File (const File &obj) {};
     File() :
     m_buf(NULL) {}
     

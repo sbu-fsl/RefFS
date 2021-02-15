@@ -18,6 +18,7 @@ private:
     enum SpecialInodeTypes m_type;
 public:
     SpecialInode(enum SpecialInodeTypes type, dev_t dev = 0);
+    SpecialInode(const SpecialInode &obj) {};
     ~SpecialInode() {};
     
     int WriteAndReply(fuse_req_t req, const char *buf, size_t size, off_t off);

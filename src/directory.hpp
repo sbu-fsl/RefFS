@@ -30,6 +30,8 @@ public:
     ReadDirCtx* PrepareReaddir(off_t cookie);
 public:
     ~Directory() {}
+    Directory() {};
+    Directory(const Directory &obj) {};
 
     void Initialize(fuse_ino_t ino, mode_t mode, nlink_t nlink, gid_t gid, uid_t uid);
     fuse_ino_t _ChildInodeNumberWithName(const std::string &name);
