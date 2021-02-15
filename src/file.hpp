@@ -6,7 +6,7 @@
 #define file_hpp
 
 class File : public Inode {
-public:
+private:
     void *m_buf;
     
 public:
@@ -18,7 +18,8 @@ public:
     int WriteAndReply(fuse_req_t req, const char *buf, size_t size, off_t off);
     int ReadAndReply(fuse_req_t req, size_t size, off_t off);
     int FileTruncate(size_t newSize);
-    
+
+    friend class FuseRamFs;
 //    size_t Size();
 };
 

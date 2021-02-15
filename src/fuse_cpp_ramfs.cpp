@@ -187,6 +187,10 @@ int FuseRamFs::restore(uint64_t key)
             file_inode->m_buf = fdata;
         }
     }
+    // clear old Inodes
+    std::vector<Inode *>().swap(Inodes);
+    Inodes = newfiles;
+    // clear stored_files
     std::vector<Inode *>().swap(stored_files);
     remove_state(key);
     return 0;
