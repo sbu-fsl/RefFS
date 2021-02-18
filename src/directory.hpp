@@ -13,6 +13,7 @@ private:
     std::shared_mutex childrenRwSem;
 
     void UpdateSize(ssize_t delta);
+    friend class FuseRamFs;
 public:
     struct ReadDirCtx {
         off_t cookie;

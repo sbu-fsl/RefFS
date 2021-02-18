@@ -22,6 +22,7 @@ using namespace std;
  */
 vector<Inode *> FuseRamFs::Inodes = vector<Inode *>();
 std::shared_mutex FuseRamFs::inodesRwSem;
+std::shared_mutex FuseRamFs::crMutex;
 
 /**
  The Inodes which have been deleted.
@@ -107,7 +108,7 @@ FuseRamFs::~FuseRamFs()
 int FuseRamFs::checkpoint(uint64_t key)
 {
     // Lock
-
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     int ret = 0;
     std::vector <Inode *> copied_files (Inodes.size());
 
@@ -122,7 +123,7 @@ int FuseRamFs::checkpoint(uint64_t key)
 
     for (unsigned i = 0; i < Inodes.size(); i++)
     {
-        inode_mode = Inodes[i]->m_fuseEntryParam.attr.st_mode;
+        inode_mode = Inodes[i]->GetMode();
         if (S_ISREG(inode_mode)){
             file_inode_old = dynamic_cast<File *>(Inodes[i]);
             if (file_inode_old == NULL){
@@ -187,12 +188,34 @@ err:
 
 void FuseRamFs::invalidate_kernel_states()
 {
+    for (std::vector<Inode *>::iterator it = Inodes.begin(); it != Inodes.end(); ++it){
+        /* Invalidate possible kernel inode cache */
+        // if m_markedForDeletion is false (the inode exists and is not marked as deleted)
+        if (!(*it)->m_markedForDeletion){
+            fuse_lowlevel_notify_inval_inode(ch, (*it)->GetIno(), 0, 0);
+        }
+        /* Invalidate potential d-cache */
+        if(S_ISDIR((*it)->GetMode())){
+            Directory *parent_dir = dynamic_cast<Directory *>(*it);
+            /* If parent_dir has child dir*/
+            for (auto it_child = parent_dir->m_children.begin(); it_child != parent_dir->m_children.end(); ++it){
+                if (it_child->first == "." || it_child->first == "..") {
+                    continue;
+                }
+                fuse_lowlevel_notify_inval_entry(ch, (*it)->GetIno(), (it_child->first).c_str(), 
+                    strlen((it_child->first).c_str()));      
+            }
+        }
+    }
+
 }
 
 
 int FuseRamFs::restore(uint64_t key)
 {
     // Lock
+    std::shared_lock<std::shared_mutex> lk(crMutex);
+
     std::vector <Inode *> stored_files = find_state(key);
     std::vector <Inode *> newfiles (stored_files.size());
     int ret = 0;
@@ -200,13 +223,14 @@ int FuseRamFs::restore(uint64_t key)
         ret = -ENOENT;
         goto err;
     }
+    invalidate_kernel_states();
 
     copy(stored_files.begin(), stored_files.end(), newfiles.begin());
     mode_t inode_mode;
     File* file_inode;
     for (std::vector<Inode *>::iterator it = newfiles.begin() ; it != newfiles.end(); ++it)
     {
-        inode_mode = (*it)->m_fuseEntryParam.attr.st_mode;
+        inode_mode = (*it)->GetMode();
         if (S_ISREG(inode_mode)){
             dynamic_cast<File *>(*it)->m_buf = NULL;
         }
@@ -214,7 +238,7 @@ int FuseRamFs::restore(uint64_t key)
 
     for (unsigned i = 0; i < newfiles.size(); i++)
     {
-        inode_mode = (newfiles[i])->m_fuseEntryParam.attr.st_mode;
+        inode_mode = (newfiles[i])->GetMode();
         if (S_ISREG(inode_mode)){
             file_inode = dynamic_cast<File *>(newfiles[i]);
             size_t dsize = file_inode->UsedBlocks() * file_inode->BufBlockSize;
