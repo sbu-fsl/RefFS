@@ -26,6 +26,7 @@ void delete_args(int argc, char **argv) {
     delete argv;
 }
 
+struct fuse_chan *ch;
 /** The main entry point for the program. A filesystem may be mounted by running this executable directly.
  * @param argc The number of arguments.
  * @param argv A pointer to the first argument.
@@ -34,7 +35,6 @@ int main(int argc, const char * argv[]) {
     char **fuse_argv = copy_args(argc, argv);
     
     struct fuse_args args = {argc, fuse_argv, 1};
-    struct fuse_chan *ch;
     struct fuse_ramfs_options options = {0};
     char *mountpoint;
     int err = -1;
