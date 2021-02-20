@@ -172,6 +172,7 @@ int FuseRamFs::checkpoint(uint64_t key)
             copied_files.push_back((Inode*) symlink_inode_copy);
         }
         else {
+            fprintf(stderr, "The checkpointed inode mode %u is not correct.", inode_mode);
             ret = -EINVAL;
             goto err;
         }

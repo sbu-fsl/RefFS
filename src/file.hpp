@@ -21,6 +21,7 @@ public:
     int FileTruncate(size_t newSize);
 
     friend class FuseRamFs;
+    friend void dump_File(File* file);
 //    size_t Size();
 };
 

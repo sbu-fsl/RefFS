@@ -2,16 +2,9 @@
 #include <vector>
 #include <cstdint>
 #include <cerrno>
-#include "inode.hpp"
-#if TESTING
-#endif
-#include "file.hpp"
-#include "directory.hpp"
-#include "special_inode.hpp"
-#include "symlink.hpp"
 #include "cr.hpp"
 
-#define PRINT_CLASS(x) std::cout << "Class Name: " << typeid(x).name() << endl
+#define PRINT_CLASS(x) std::cout << "---------------Class Name: " << typeid(x).name() << std::endl
 #define PRINT_VAL(x) std::cout << #x"=" << x << std::endl
 
 std::unordered_map<uint64_t, std::vector <Inode *> > state_pool;
@@ -23,6 +16,10 @@ int insert_state(uint64_t key, std::vector <Inode *> inode_vec)
     return -EEXIST;
   }
   state_pool.insert({key, inode_vec});
+
+  printf("Running dump_state_pool() to dump current states\n");
+  dump_state_pool();
+
   return 0;
 }
 
@@ -46,14 +43,9 @@ int remove_state(uint64_t key)
   return 0;
 }
 
-#if TESTING
-#endif
-
-int dump_File(File* file)
+void dump_File(File* file)
 {
-
-
-
+  PRINT_VAL((char*)(file->m_buf));
 }
 
 void dump_Directory(Directory* dir)
@@ -64,7 +56,6 @@ void dump_Directory(Directory* dir)
 void dump_SpecialInode(SpecialInode* sinode)
 {
 
-
 }
 
 void dump_SymLink(SymLink* symlink)
@@ -72,10 +63,10 @@ void dump_SymLink(SymLink* symlink)
 
 }
 
-
 int dump_state_pool()
 {
   uint64_t key;
+  int ret = 0;
   std::vector <Inode *> value_inode;
   for (const auto &each_state : state_pool) {
     key = each_state.first;
@@ -84,20 +75,30 @@ int dump_state_pool()
     for (std::vector<Inode *>::iterator it = value_inode.begin(); it != value_inode.end(); ++it){
       if (S_ISREG((*it)->GetMode())){
         File *file = dynamic_cast<File *>(*it);
-      } else if (S_ISDIR((*it)->GetMode())){
+        PRINT_CLASS(file);
+        dump_File(file);
+      } 
+      else if (S_ISDIR((*it)->GetMode())){
         Directory *dir = dynamic_cast<Directory *>(*it);
-      } else if (S_ISCHR((*it)->GetMode()) || S_ISBLK((*it)->GetMode()) || S_ISFIFO((*it)->GetMode())
+        PRINT_CLASS(dir);
+      } 
+      else if (S_ISCHR((*it)->GetMode()) || S_ISBLK((*it)->GetMode()) || S_ISFIFO((*it)->GetMode())
                   || S_ISSOCK((*it)->GetMode()))
       {
         SpecialInode *sinode = dynamic_cast<SpecialInode *>(*it);
-      } else if (S_ISLNK((*it)->GetMode())){
+        PRINT_CLASS(sinode);
+      } 
+      else if (S_ISLNK((*it)->GetMode())){
         SymLink *symlink = dynamic_cast<SymLink *>(*it);
+        PRINT_CLASS(symlink);
       }
-
+      else{
+        fprintf(stderr, "dump_state_pool has incorrect inode type %u", (*it)->GetMode());
+        ret = -EINVAL;
+        return ret;
+      }
     }
-
-
   }
-
-
+  return ret;
 }
+

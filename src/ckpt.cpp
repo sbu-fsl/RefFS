@@ -3,6 +3,9 @@
 #include <cstdint>
 #include <cerrno>
 #include "fuse_cpp_ramfs.hpp"
+#include "testops.h"
+
+std::string MOUNTPOINT = "/mnt/test-verifs2";
 
 int main(int argc, char **argv)
 {
@@ -22,7 +25,27 @@ int main(int argc, char **argv)
         exit(1);
     }
 
-    int ret = ioctl(dirfd, VERIFS2_CHECKPOINT, (void *)key);
+    int ret;
+    std::string testfile = "/ckpt_test.txt";
+    std::string testdir = "/ckpt_test_dir";
+    /* do some file system operations */
+    // create a file
+    ret = create_file((MOUNTPOINT+testfile).c_str(), 0644);
+    if(ret < 0){
+        return ret;
+    }
+    // write to a file
+    char *data = (char *)"Checkpoint";
+    ret = write_file((MOUNTPOINT+testfile).c_str(), data, 0, 10);
+    if(ret < 0){
+        return ret;
+    }
+    // create a directory
+    ret = create_dir((MOUNTPOINT+testdir).c_str(), 0755);
+    if(ret < 0){
+        return ret;
+    }
+    ret = ioctl(dirfd, VERIFS2_CHECKPOINT, (void *)key);
     if (ret != 0) {
         printf("Result: ret = %d, errno = %d\n", ret, errno);
     }
