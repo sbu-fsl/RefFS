@@ -18,7 +18,7 @@ int insert_state(uint64_t key, std::vector <Inode *> inode_vec)
   state_pool.insert({key, inode_vec});
 
   printf("Running dump_state_pool() to dump current states\n");
-  dump_state_pool();
+  //dump_state_pool();
 
   return 0;
 }

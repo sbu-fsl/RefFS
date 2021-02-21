@@ -108,9 +108,12 @@ FuseRamFs::~FuseRamFs()
 int FuseRamFs::checkpoint(uint64_t key)
 {
     // Lock
-    std::shared_lock<std::shared_mutex> lk(crMutex);
+    //std::shared_lock<std::shared_mutex> lk(crMutex);
+    std::cout << "Start checkpoint()..." << std::endl;
     int ret = 0;
     std::vector <Inode *> copied_files (Inodes.size());
+
+    std::cout << "Inodes size: " << Inodes.size() << " ..." << std::endl;
 
     //std::copy(Inodes.begin(), Inodes.end(), copied_files.begin());
 
@@ -123,26 +126,41 @@ int FuseRamFs::checkpoint(uint64_t key)
 
     for (unsigned i = 0; i < Inodes.size(); i++)
     {
+        std::cout << "------------------------------------------------" << std::endl;
+        std::cout << "Checkpoint current i: " << i << std::endl;
         inode_mode = Inodes[i]->GetMode();
+        std::cout << "inode_mode: " << inode_mode << std::endl;
+        std::cout << "inode_mode File: " << S_ISREG(inode_mode) << std::endl;
+        std::cout << "inode_mode Directory: " << S_ISDIR(inode_mode) << std::endl;
+        std::cout << "inode_mode SpecialInode: " << (S_ISCHR(inode_mode) || S_ISBLK(inode_mode) || S_ISFIFO(inode_mode) || S_ISSOCK(inode_mode)) << std::endl;
+        std::cout << "inode_mode SymLink: " << S_ISLNK(inode_mode) << std::endl;
         if (S_ISREG(inode_mode)){
+            std::cout << "Casting..." << std::endl;
             file_inode_old = dynamic_cast<File *>(Inodes[i]);
             if (file_inode_old == NULL){
                 ret = -EBADF;
                 goto err;
             }
+            std::cout << "Copying object... " << std::endl;
 
             File *file_inode_copy = new File(*file_inode_old);
             copied_files.push_back((Inode*) file_inode_copy);
 
-            file_inode_old->m_buf = NULL;
+            std::cout << "Fetching m_buf... " << std::endl;
+
+            file_inode_copy->m_buf = NULL;
             size_t datasz = file_inode_old->UsedBlocks() * file_inode_old->BufBlockSize;
+            std::cout << "malloc(datasz)... " << std::endl;
             void *fdata = malloc(datasz);
             if (!fdata) {
                 ret = -ENOMEM;
                 goto err;
             }
-            memcpy(fdata, dynamic_cast<File *>(Inodes[i])->m_buf, datasz);
+            std::cout << "memcpy fdata ... " << std::endl;
+            memcpy(fdata, file_inode_old->m_buf, datasz);
+            std::cout << "Assigning fdata ... " << std::endl;
             file_inode_copy->m_buf = fdata;
+            std::cout << "Regular File handling ends..." << std::endl;
         } else if (S_ISDIR(inode_mode)) {
             dir_inode_old = dynamic_cast<Directory *>(Inodes[i]);
             if (dir_inode_old == NULL){
@@ -172,16 +190,21 @@ int FuseRamFs::checkpoint(uint64_t key)
             copied_files.push_back((Inode*) symlink_inode_copy);
         }
         else {
+            continue;
+            /*
             fprintf(stderr, "The checkpointed inode mode %u is not correct.", inode_mode);
             ret = -EINVAL;
             goto err;
+            */
         }
     }
     // insert state
+    std::cout << "Start inserting state..." << std::endl;
     ret = insert_state(key, copied_files);
     return ret;
 err:
     // clear copied_files vector
+    std::cout << "Checkpointing error..." << std::endl;
     std::vector<Inode *>().swap(copied_files);
     // Unlock
     return ret;
@@ -215,7 +238,7 @@ void FuseRamFs::invalidate_kernel_states()
 int FuseRamFs::restore(uint64_t key)
 {
     // Lock
-    std::shared_lock<std::shared_mutex> lk(crMutex);
+    //std::shared_lock<std::shared_mutex> lk(crMutex);
 
     std::vector <Inode *> stored_files = find_state(key);
     std::vector <Inode *> newfiles (stored_files.size());
@@ -224,7 +247,7 @@ int FuseRamFs::restore(uint64_t key)
         ret = -ENOENT;
         goto err;
     }
-    invalidate_kernel_states();
+    //invalidate_kernel_states();
 
     copy(stored_files.begin(), stored_files.end(), newfiles.begin());
     mode_t inode_mode;
@@ -268,17 +291,21 @@ void FuseRamFs::FuseIoctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
                         struct fuse_file_info *fi, unsigned flags,
                         const void *in_buf, size_t in_bufsz, size_t out_bufsz)
 {
+    std::cout << "Start FuseIoctl..." << std::endl;
     int ret;
     switch (cmd){
         case VERIFS2_CHECKPOINT:
+            std::cout << "Start VERIFS2_CHECKPOINT in FuseIoctl..." << std::endl;
             ret = checkpoint((uint64_t)arg);
             break;
         
         case VERIFS2_RESTORE:
+            std::cout << "Start VERIFS2_RESTORE in FuseIoctl..." << std::endl;
             ret = restore((uint64_t)arg);
             break;
         
         default:
+            std::cout << "Not implemented in FuseIoctl..." << std::endl;
             ret = ENOTSUP;
             break;
     }

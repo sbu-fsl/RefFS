@@ -26,10 +26,11 @@ int main(int argc, char **argv)
     }
 
     int ret;
-    std::string testfile = "/ckpt_test.txt";
-    std::string testdir = "/ckpt_test_dir";
     /* do some file system operations */
     // create a file
+    
+    std::string testfile = "/ckpt_test.txt";
+    std::string testdir = "/ckpt_test_dir";
     ret = create_file((MOUNTPOINT+testfile).c_str(), 0644);
     if(ret < 0){
         return ret;
@@ -40,11 +41,15 @@ int main(int argc, char **argv)
     if(ret < 0){
         return ret;
     }
+    
+    /*
     // create a directory
     ret = create_dir((MOUNTPOINT+testdir).c_str(), 0755);
     if(ret < 0){
         return ret;
     }
+    */
+    printf("Before ioctl...\n");
     ret = ioctl(dirfd, VERIFS2_CHECKPOINT, (void *)key);
     if (ret != 0) {
         printf("Result: ret = %d, errno = %d\n", ret, errno);
