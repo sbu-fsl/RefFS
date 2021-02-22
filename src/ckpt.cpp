@@ -42,13 +42,13 @@ int main(int argc, char **argv)
         return ret;
     }
     
-    /*
+    
     // create a directory
     ret = create_dir((MOUNTPOINT+testdir).c_str(), 0755);
     if(ret < 0){
         return ret;
     }
-    */
+    
     printf("Before ioctl...\n");
     ret = ioctl(dirfd, VERIFS2_CHECKPOINT, (void *)key);
     if (ret != 0) {
