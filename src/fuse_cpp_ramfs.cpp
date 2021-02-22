@@ -108,7 +108,7 @@ FuseRamFs::~FuseRamFs()
 int FuseRamFs::checkpoint(uint64_t key)
 {
     // Lock
-    //std::shared_lock<std::shared_mutex> lk(crMutex);
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     std::cout << "Start checkpoint()..." << std::endl;
     int ret = 0;
     std::vector <Inode *> copied_files (Inodes.size());
@@ -238,7 +238,7 @@ void FuseRamFs::invalidate_kernel_states()
 int FuseRamFs::restore(uint64_t key)
 {
     // Lock
-    //std::shared_lock<std::shared_mutex> lk(crMutex);
+    std::shared_lock<std::shared_mutex> lk(crMutex);
 
     std::vector <Inode *> stored_files = find_state(key);
     std::vector <Inode *> newfiles (stored_files.size());
