@@ -10,7 +10,7 @@ private:
     void *m_buf;
     
 public:
-    File (const File &obj) {};
+    File (File &obj);
     File() :
     m_buf(NULL) {}
     
@@ -21,6 +21,7 @@ public:
     int FileTruncate(size_t newSize);
 
     friend class FuseRamFs;
+    friend class AnyInode;
     friend void dump_File(File* file);
 //    size_t Size();
 };

@@ -32,7 +32,7 @@ public:
 public:
     ~Directory() {}
     Directory() {};
-    Directory(const Directory &obj) {};
+    Directory(Directory &obj);
 
     void Initialize(fuse_ino_t ino, mode_t mode, nlink_t nlink, gid_t gid, uid_t uid);
     fuse_ino_t _ChildInodeNumberWithName(const std::string &name);
@@ -54,6 +54,8 @@ public:
     const std::map<std::string, fuse_ino_t> &Children() { return m_children; }
 
     std::shared_mutex& DirLock() { return childrenRwSem; }
+
+    friend void dump_Directory(Directory* dir);
 };
 
 #endif /* directory_hpp */

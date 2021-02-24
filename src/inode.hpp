@@ -22,6 +22,7 @@ public:
     static const size_t BufBlockSize = 512;
     
 public:
+    Inode (const Inode &obj) {};
     Inode() :
     m_markedForDeletion(false),
     m_nlookup(0)
@@ -80,6 +81,10 @@ public:
     bool Forgotten() { return m_nlookup == 0; }
 
     friend class FuseRamFs;
+    friend class File;
+    friend class Directory;
+    friend class SpecialInode;
+    friend class SymLink;
 };
 
 #endif /* inode_hpp */

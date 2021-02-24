@@ -11,6 +11,21 @@
 using namespace std;
 std::unordered_map<off_t, Directory::ReadDirCtx *> Directory::readdirStates;
 
+Directory::Directory(Directory &obj)
+{
+    // Special for Directory
+    m_children =obj.m_children;
+    // Common in Inode
+    m_fuseEntryParam = obj.m_fuseEntryParam;
+    m_markedForDeletion = obj.m_markedForDeletion;
+    m_nlookup.store(obj.m_nlookup);
+    m_xattr = obj.m_xattr;
+    //entryRwSem(obj.entryRwSem);
+    //xattrRwSem(obj.xattrRwSem);
+}
+
+
+
 void Directory::UpdateSize(ssize_t delta) {
     std::unique_lock<std::shared_mutex> lk(entryRwSem);
 

@@ -10,7 +10,7 @@ private:
     std::string m_link;
     
 public:
-    SymLink(const SymLink& obj) {};
+    SymLink(SymLink& obj);
     SymLink(const std::string &link) :
     m_link(link) {};
     
@@ -23,6 +23,7 @@ public:
     
     
     const std::string &Link() { return m_link; }
+    friend void dump_SymLink(SymLink* m_link);
 };
 
 #endif /* symlink_hpp */

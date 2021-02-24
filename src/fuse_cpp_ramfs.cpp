@@ -13,6 +13,7 @@
 #include "directory.hpp"
 #include "special_inode.hpp"
 #include "symlink.hpp"
+//#include "anyinode.hpp"
 #include "fuse_cpp_ramfs.hpp"
 
 using namespace std;
@@ -111,7 +112,7 @@ int FuseRamFs::checkpoint(uint64_t key)
     std::shared_lock<std::shared_mutex> lk(crMutex);
     std::cout << "Start checkpoint()..." << std::endl;
     int ret = 0;
-    std::vector <Inode *> copied_files (Inodes.size());
+    std::vector <Inode *> copied_files = std::vector<Inode *>();
 
     std::cout << "Inodes size: " << Inodes.size() << " ..." << std::endl;
 
@@ -145,22 +146,10 @@ int FuseRamFs::checkpoint(uint64_t key)
 
             File *file_inode_copy = new File(*file_inode_old);
             copied_files.push_back((Inode*) file_inode_copy);
-
+            std::cout << "Printing copy object mode: " << ((Inode*) file_inode_copy)->GetMode() << std::endl;
             std::cout << "Fetching m_buf... " << std::endl;
-
-            file_inode_copy->m_buf = NULL;
-            size_t datasz = file_inode_old->UsedBlocks() * file_inode_old->BufBlockSize;
-            std::cout << "malloc(datasz)... " << std::endl;
-            void *fdata = malloc(datasz);
-            if (!fdata) {
-                ret = -ENOMEM;
-                goto err;
-            }
-            std::cout << "memcpy fdata ... " << std::endl;
-            memcpy(fdata, file_inode_old->m_buf, datasz);
-            std::cout << "Assigning fdata ... " << std::endl;
-            file_inode_copy->m_buf = fdata;
             std::cout << "Regular File handling ends..." << std::endl;
+            break;
         } else if (S_ISDIR(inode_mode)) {
             dir_inode_old = dynamic_cast<Directory *>(Inodes[i]);
             if (dir_inode_old == NULL){
@@ -189,17 +178,19 @@ int FuseRamFs::checkpoint(uint64_t key)
             SymLink *symlink_inode_copy = new SymLink(*symlink_inode_old);
             copied_files.push_back((Inode*) symlink_inode_copy);
         }
-        else {
+        else if (inode_mode == 0){
             continue;
-            /*
+        }
+        else {
             fprintf(stderr, "The checkpointed inode mode %u is not correct.", inode_mode);
             ret = -EINVAL;
             goto err;
-            */
         }
     }
     // insert state
     std::cout << "Start inserting state..." << std::endl;
+    std::cout << "copied_files size: " << copied_files.size() << std::endl;
+    std::cout << "copied_files in checkpoint: " << copied_files[0]->GetMode() << std::endl;
     ret = insert_state(key, copied_files);
     return ret;
 err:

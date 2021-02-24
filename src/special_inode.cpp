@@ -14,6 +14,18 @@ m_type(type) {
 
 //SpecialInode::~SpecialInode() {}
 
+SpecialInode::SpecialInode(SpecialInode &obj)
+{
+    // Special for Directory
+    m_type =obj.m_type;
+    // Common in Inode
+    m_fuseEntryParam = obj.m_fuseEntryParam;
+    m_markedForDeletion = obj.m_markedForDeletion;
+    m_nlookup.store(obj.m_nlookup);
+    m_xattr = obj.m_xattr;
+    //entryRwSem(obj.entryRwSem);
+    //xattrRwSem(obj.xattrRwSem);
+}
 
 enum SpecialInodeTypes SpecialInode::Type() {
     return m_type;
