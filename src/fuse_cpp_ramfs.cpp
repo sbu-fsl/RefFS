@@ -13,7 +13,6 @@
 #include "directory.hpp"
 #include "special_inode.hpp"
 #include "symlink.hpp"
-//#include "anyinode.hpp"
 #include "fuse_cpp_ramfs.hpp"
 
 using namespace std;

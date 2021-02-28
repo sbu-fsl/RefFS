@@ -14,11 +14,12 @@ File::File(File& obj){
     m_buf = NULL;
     size_t datasz = obj.UsedBlocks() * obj.BufBlockSize;
     int ret;
-    std::cout << "malloc(datasz)... " << std::endl;
     void *fdata = malloc(datasz);
-    std::cout << "memcpy fdata ... " << std::endl;
+    if (!fdata){
+        std::cerr << "malloc failed for File copy constructor\n";
+        exit(EXIT_FAILURE);
+    }
     memcpy(fdata, obj.m_buf, datasz);
-    std::cout << "Assigning fdata ... " << std::endl;
     m_buf = fdata;
     // Common in Inode
     m_fuseEntryParam = obj.m_fuseEntryParam;
