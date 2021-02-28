@@ -4,8 +4,8 @@
 #include <cerrno>
 #include "cr.hpp"
 
-#define PRINT_CLASS(x) std::cout << "---------------Class Name: " << typeid(x).name() << std::endl
-#define PRINT_VAL(x) std::cout << #x"=" << x << std::endl
+#define PRINT_CLASS(x) std::cout << "---Class Name: " << typeid(x).name() << std::endl
+#define PRINT_VAL(x) std::cout << #x" : " << x << std::endl
 
 std::unordered_map<uint64_t, std::vector <Inode *> > state_pool;
 
@@ -40,6 +40,8 @@ int remove_state(uint64_t key)
   return 0;
 }
 
+/* Dump functionalites to verify Checkpoint/Restore APIs */
+
 void dump_File(File* file)
 {
   PRINT_VAL((char*)(file->m_buf));
@@ -48,7 +50,8 @@ void dump_File(File* file)
 void dump_Directory(Directory* dir)
 {
   for (auto& t : dir->m_children){
-    std::cout << t.first << " " << t.second << "\n";
+    std::cout << "Child name: " << t.first << "  |  " 
+              << "Child inode number: " << t.second << "\n";
   }
 }
 
@@ -69,13 +72,11 @@ static int dump_each_inode_type(std::vector<Inode *>::iterator it)
   if (S_ISREG((*it)->GetMode())){
     std::cout << "Dump File..." << std::endl;
     File *file = dynamic_cast<File *>(*it);
-    //PRINT_CLASS(file);
     dump_File(file);
   } 
   else if (S_ISDIR((*it)->GetMode())){
     std::cout << "Dump Directory..." << std::endl;
     Directory *dir = dynamic_cast<Directory *>(*it);
-    //PRINT_CLASS(dir);
     dump_Directory(dir);
   } 
   else if (S_ISCHR((*it)->GetMode()) || S_ISBLK((*it)->GetMode()) || S_ISFIFO((*it)->GetMode())
@@ -83,20 +84,18 @@ static int dump_each_inode_type(std::vector<Inode *>::iterator it)
   {
     std::cout << "Dump SpecialInode..." << std::endl;
     SpecialInode *sinode = dynamic_cast<SpecialInode *>(*it);
-    //PRINT_CLASS(sinode);
     dump_SpecialInode(sinode);
   } 
   else if (S_ISLNK((*it)->GetMode())){
     std::cout << "Dump SymLink..." << std::endl;
     SymLink *symlink = dynamic_cast<SymLink *>(*it);
-    //PRINT_CLASS(symlink);
     dump_SymLink(symlink);
   }
   else if ((*it)->GetMode() == 0){
     return ret;
   }
   else{
-    fprintf(stderr, "dumping inode has incorrect inode type %u", (*it)->GetMode());
+    std::cerr << "dumping inode has incorrect inode type " << (*it)->GetMode() << "\n";
     ret = -EINVAL;
   }
   return ret;
@@ -107,7 +106,6 @@ static int _dump_inodes_verifs2(std::vector<Inode *> Inodes)
 {
   int ret;
   for (std::vector<Inode *>::iterator it = Inodes.begin(); it != Inodes.end(); ++it){
-    std::cout << "Curr dump iteraor mode: " << (*it)->GetMode() << std::endl;
     ret = dump_each_inode_type(it);
     if (ret != 0){
       return ret;
@@ -119,7 +117,7 @@ static int _dump_inodes_verifs2(std::vector<Inode *> Inodes)
 
 int dump_inodes_verifs2(std::vector<Inode *> Inodes, std::string info)
 {
-  std::cout << "\033[1;31m" + info + "\033[0m" << std::endl;
+  std::cout << "\033[1;35m" + info + "\033[0m" << std::endl;
   std::cout << "Size of Inodes: " << Inodes.size() << std::endl;
   int ret = _dump_inodes_verifs2(Inodes);
   std::cout << "\033[1;32mdump_inodes_verifs2 Finished!\033[0m" << std::endl;
@@ -129,29 +127,17 @@ int dump_inodes_verifs2(std::vector<Inode *> Inodes, std::string info)
 
 int dump_state_pool()
 {
-  std::cout << "Start dump_state_pool()..." << std::endl;
-  std::cout << "state_pool size: " << state_pool.size() << std::endl;
   uint64_t key;
   int ret = 0;
   std::vector <Inode *> value_inode;
+  int state_cnt = 0;
   for (const auto &each_state : state_pool) {
-    std::cout << "For each state..." << std::endl;
-    std::cout << "each state first:" << each_state.first << std::endl;
-    std::cout << "each state second:" << each_state.second[1] << std::endl;
-    std::cout << "each_state.second.size():" << each_state.second.size() << std::endl;
+    std::cout << "\033[1;35mDump the "<< state_cnt <<"-th state\033[0m\n";
+    state_cnt++;
     key = each_state.first;
-    /*
-    for (int i = 0; i < each_state.second.size(); i++){
-      if (i == 0){
-        continue;
-      }
-      std::cout << "Start getting mode..." << std::endl;
-      std::cout << "each_state.second: " << each_state.second[i]->GetIno() << std::endl;
-    }
-    */
     value_inode = each_state.second;
-    std::cout << "value_inode.size(): " << value_inode.size() << std::endl;
     std::cout << "Key: " << each_state.first << std::endl;
+    std::cout << "value_inode.size(): " << value_inode.size() << std::endl;
     for (std::vector<Inode *>::iterator it = value_inode.begin(); it != value_inode.end(); ++it){
       ret = dump_each_inode_type(it);
       if (ret != 0){

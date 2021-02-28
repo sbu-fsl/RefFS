@@ -292,7 +292,6 @@ int FuseRamFs::restore(uint64_t key)
     // clear stored_files
     std::vector<Inode *>().swap(stored_files);
     remove_state(key);
-    std::cout << "restore() in fuse_cpp_ramfs.cpp finished!" << std::endl;
     ret = dump_inodes_verifs2(Inodes, "After the restore():");
     if (ret != 0){
         goto err;
