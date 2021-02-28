@@ -110,13 +110,8 @@ int FuseRamFs::checkpoint(uint64_t key)
 {
     // Lock
     std::shared_lock<std::shared_mutex> lk(crMutex);
-    std::cout << "Start checkpoint()..." << std::endl;
     int ret = 0;
     std::vector <Inode *> copied_files = std::vector<Inode *>();
-
-    std::cout << "Inodes size: " << Inodes.size() << " ..." << std::endl;
-
-    //std::copy(Inodes.begin(), Inodes.end(), copied_files.begin());
 
     mode_t inode_mode;
 
@@ -127,28 +122,18 @@ int FuseRamFs::checkpoint(uint64_t key)
 
     for (unsigned i = 0; i < Inodes.size(); i++)
     {
-        std::cout << "------------------------------------------------" << std::endl;
-        std::cout << "Checkpoint current i: " << i << std::endl;
         inode_mode = Inodes[i]->GetMode();
-        std::cout << "inode_mode: " << inode_mode << std::endl;
-        std::cout << "inode_mode File: " << S_ISREG(inode_mode) << std::endl;
-        std::cout << "inode_mode Directory: " << S_ISDIR(inode_mode) << std::endl;
-        std::cout << "inode_mode SpecialInode: " << (S_ISCHR(inode_mode) || S_ISBLK(inode_mode) || S_ISFIFO(inode_mode) || S_ISSOCK(inode_mode)) << std::endl;
-        std::cout << "inode_mode SymLink: " << S_ISLNK(inode_mode) << std::endl;
+
         if (S_ISREG(inode_mode)){
-            std::cout << "Casting..." << std::endl;
             file_inode_old = dynamic_cast<File *>(Inodes[i]);
             if (file_inode_old == NULL){
                 ret = -EBADF;
                 goto err;
             }
-            std::cout << "Copying object... " << std::endl;
 
             File *file_inode_copy = new File(*file_inode_old);
             copied_files.push_back((Inode*) file_inode_copy);
-            std::cout << "Printing copy object mode: " << ((Inode*) file_inode_copy)->GetMode() << std::endl;
-            std::cout << "Fetching m_buf... " << std::endl;
-            std::cout << "Regular File handling ends..." << std::endl;
+
         } else if (S_ISDIR(inode_mode)) {
             dir_inode_old = dynamic_cast<Directory *>(Inodes[i]);
             if (dir_inode_old == NULL){
@@ -158,6 +143,7 @@ int FuseRamFs::checkpoint(uint64_t key)
 
             Directory *dir_copy = new Directory(*dir_inode_old);
             copied_files.push_back((Inode*) dir_copy);
+
         } else if (S_ISCHR(inode_mode) || S_ISBLK(inode_mode) || S_ISFIFO(inode_mode) || S_ISSOCK(inode_mode)) {
             special_inode_old = dynamic_cast<SpecialInode *>(Inodes[i]);
             if (special_inode_old == NULL){
@@ -167,6 +153,7 @@ int FuseRamFs::checkpoint(uint64_t key)
 
             SpecialInode *special_inode_copy = new SpecialInode(*special_inode_old);
             copied_files.push_back((Inode*) special_inode_copy);
+
         } else if (S_ISLNK(inode_mode)) {
             symlink_inode_old = dynamic_cast<SymLink *>(Inodes[i]);
             if (symlink_inode_old == NULL){
@@ -181,15 +168,12 @@ int FuseRamFs::checkpoint(uint64_t key)
             continue;
         }
         else {
-            fprintf(stderr, "The checkpointed inode mode %u is not correct.", inode_mode);
+            std::cerr << "The checkpointed inode mode "<< inode_mode << " is not correct.\n";
             ret = -EINVAL;
             goto err;
         }
     }
     // insert state
-    std::cout << "Start inserting state..." << std::endl;
-    std::cout << "copied_files size: " << copied_files.size() << std::endl;
-    std::cout << "copied_files in checkpoint: " << copied_files[0]->GetMode() << std::endl;
     ret = insert_state(key, copied_files);
     if (ret != 0){
         goto err;
@@ -201,7 +185,7 @@ int FuseRamFs::checkpoint(uint64_t key)
     return ret;
 err:
     // clear copied_files vector
-    std::cout << "Checkpointing error..." << std::endl;
+    std::cerr << "Checkpointing went to error.\n";
     std::vector<Inode *>().swap(copied_files);
     // Unlock
     return ret;
@@ -217,22 +201,15 @@ void FuseRamFs::invalidate_kernel_states()
         }
         /* Invalidate potential d-cache */
         if(S_ISDIR((*it)->GetMode())){
-            std::cout << "invalidate_kernel_states() gets dir dentry..." << std::endl;
             Directory *parent_dir = dynamic_cast<Directory *>(*it);
             /* If parent_dir has child dir*/
-            std::cout << "Before fuse_lowlevel_notify_inval_entry() for loop..." << std::endl;
             for (auto it_child = parent_dir->m_children.begin(); it_child != parent_dir->m_children.end(); ++it_child){
-                std::cout << "start for::::: " << std::endl;
-                std::cout << "Distance: " << std::distance(parent_dir->m_children.begin(), it_child) << std::endl;
                 if (it_child->second > 0 && it_child->first != "." && it_child->first != ".."){
-                    std::cout << "Before execute fuse_lowlevel_notify_inval_entry()..." << std::endl;
                     fuse_lowlevel_notify_inval_entry(ch, (*it)->GetIno(), (it_child->first).c_str(), (it_child->first).size());
-                    std::cout << "After execute fuse_lowlevel_notify_inval_entry()..." << std::endl;
                 }
             }
         }
     }
-    std::cout << "###################END OF invalidate_kernel_states..." << std::endl;
 }
 
 
@@ -330,22 +307,19 @@ void FuseRamFs::FuseIoctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
                         struct fuse_file_info *fi, unsigned flags,
                         const void *in_buf, size_t in_bufsz, size_t out_bufsz)
 {
-    std::cout << "Start FuseIoctl..." << std::endl;
     int ret;
     switch (cmd){
         case VERIFS2_CHECKPOINT:
-            std::cout << "Start VERIFS2_CHECKPOINT in FuseIoctl..." << std::endl;
             ret = checkpoint((uint64_t)arg);
             break;
         
         case VERIFS2_RESTORE:
-            std::cout << "Start VERIFS2_RESTORE in FuseIoctl..." << std::endl;
             ret = restore((uint64_t)arg);
             break;
         
         default:
-            std::cout << "Not implemented in FuseIoctl..." << std::endl;
-            ret = ENOTSUP;
+            std::cerr << "Function Not implemented in FuseIoctl.\n";
+            ret = ENOSYS;
             break;
     }
     if (ret == 0) {
