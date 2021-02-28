@@ -2,10 +2,11 @@
 
 int create_file(const char *path, mode_t mode)
 {
-  int fd = creat(path, mode);
+    int fd = creat(path, mode);
     if (fd >= 0) {
         close(fd);
     }
+
     return (fd >= 0)? 0 : -1;
 }
 
@@ -30,17 +31,40 @@ ssize_t write_file(const char *path, void *data, off_t offset, size_t length)
         errno = err;
         return -1;
     }
-    if (writesz < length) {
+    else if (writesz < length) {
         fprintf(stderr, "Note: less data written than expected (%ld < %zu)\n",
                 writesz, length);
+    }
+    else{
+        printf("write(%s) -> ret=%ld, errno=%s\n", 
+        path, writesz, strerror(errno));
     }
     close(fd);
     return writesz;
 }
+
+int unlink_file(const char *path)
+{
+    int ret = unlink(path);
+    int err = errno;
+	printf("unlink(%s) -> ret=%d, errno=%s\n",
+	       path, ret, strerror(err));
+    return ret;
+}
+
 
 int create_dir(const char *path, mode_t mode)
 {
     int status;
     status = mkdir(path, mode);
     return status;
+}
+
+int remove_dir(const char *path)
+{
+    int ret = rmdir(path);
+    int err = errno;
+	printf("rmdir(%s) -> ret=%d, errno=%s\n", 
+            path, ret, strerror(err));
+	return ret;
 }

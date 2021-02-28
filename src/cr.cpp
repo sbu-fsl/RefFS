@@ -17,9 +17,6 @@ int insert_state(uint64_t key, std::vector <Inode *> inode_vec)
   }
   state_pool.insert({key, inode_vec});
 
-  printf("Running dump_state_pool() to dump current states\n");
-  dump_state_pool();
-
   return 0;
 }
 
@@ -50,9 +47,8 @@ void dump_File(File* file)
 
 void dump_Directory(Directory* dir)
 {
-for (auto& t : dir->m_children){
-    std::cout << t.first << " " 
-              << t.second << "\n";
+  for (auto& t : dir->m_children){
+    std::cout << t.first << " " << t.second << "\n";
   }
 }
 
@@ -65,6 +61,71 @@ void dump_SymLink(SymLink* symlink)
 {
   PRINT_VAL(symlink->m_link);
 }
+
+
+static int dump_each_inode_type(std::vector<Inode *>::iterator it)
+{
+  int ret = 0;
+  if (S_ISREG((*it)->GetMode())){
+    std::cout << "Dump File..." << std::endl;
+    File *file = dynamic_cast<File *>(*it);
+    //PRINT_CLASS(file);
+    dump_File(file);
+  } 
+  else if (S_ISDIR((*it)->GetMode())){
+    std::cout << "Dump Directory..." << std::endl;
+    Directory *dir = dynamic_cast<Directory *>(*it);
+    //PRINT_CLASS(dir);
+    dump_Directory(dir);
+  } 
+  else if (S_ISCHR((*it)->GetMode()) || S_ISBLK((*it)->GetMode()) || S_ISFIFO((*it)->GetMode())
+              || S_ISSOCK((*it)->GetMode()))
+  {
+    std::cout << "Dump SpecialInode..." << std::endl;
+    SpecialInode *sinode = dynamic_cast<SpecialInode *>(*it);
+    //PRINT_CLASS(sinode);
+    dump_SpecialInode(sinode);
+  } 
+  else if (S_ISLNK((*it)->GetMode())){
+    std::cout << "Dump SymLink..." << std::endl;
+    SymLink *symlink = dynamic_cast<SymLink *>(*it);
+    //PRINT_CLASS(symlink);
+    dump_SymLink(symlink);
+  }
+  else if ((*it)->GetMode() == 0){
+    return ret;
+  }
+  else{
+    fprintf(stderr, "dumping inode has incorrect inode type %u", (*it)->GetMode());
+    ret = -EINVAL;
+  }
+  return ret;
+}
+
+
+static int _dump_inodes_verifs2(std::vector<Inode *> Inodes)
+{
+  int ret;
+  for (std::vector<Inode *>::iterator it = Inodes.begin(); it != Inodes.end(); ++it){
+    std::cout << "Curr dump iteraor mode: " << (*it)->GetMode() << std::endl;
+    ret = dump_each_inode_type(it);
+    if (ret != 0){
+      return ret;
+    }
+  }
+  return ret;
+}
+
+
+int dump_inodes_verifs2(std::vector<Inode *> Inodes, std::string info)
+{
+  std::cout << "\033[1;31m" + info + "\033[0m" << std::endl;
+  std::cout << "Size of Inodes: " << Inodes.size() << std::endl;
+  int ret = _dump_inodes_verifs2(Inodes);
+  std::cout << "\033[1;32mdump_inodes_verifs2 Finished!\033[0m" << std::endl;
+  return ret;
+}
+
 
 int dump_state_pool()
 {
@@ -79,6 +140,7 @@ int dump_state_pool()
     std::cout << "each state second:" << each_state.second[1] << std::endl;
     std::cout << "each_state.second.size():" << each_state.second.size() << std::endl;
     key = each_state.first;
+    /*
     for (int i = 0; i < each_state.second.size(); i++){
       if (i == 0){
         continue;
@@ -86,40 +148,13 @@ int dump_state_pool()
       std::cout << "Start getting mode..." << std::endl;
       std::cout << "each_state.second: " << each_state.second[i]->GetIno() << std::endl;
     }
-
+    */
     value_inode = each_state.second;
     std::cout << "value_inode.size(): " << value_inode.size() << std::endl;
     std::cout << "Key: " << each_state.first << std::endl;
     for (std::vector<Inode *>::iterator it = value_inode.begin(); it != value_inode.end(); ++it){
-      if (S_ISREG((*it)->GetMode())){
-        std::cout << "Dump File..." << std::endl;
-        File *file = dynamic_cast<File *>(*it);
-        PRINT_CLASS(file);
-        dump_File(file);
-      } 
-      else if (S_ISDIR((*it)->GetMode())){
-        std::cout << "Dump Directory..." << std::endl;
-        Directory *dir = dynamic_cast<Directory *>(*it);
-        PRINT_CLASS(dir);
-        dump_Directory(dir);
-      } 
-      else if (S_ISCHR((*it)->GetMode()) || S_ISBLK((*it)->GetMode()) || S_ISFIFO((*it)->GetMode())
-                  || S_ISSOCK((*it)->GetMode()))
-      {
-        std::cout << "Dump SpecialInode..." << std::endl;
-        SpecialInode *sinode = dynamic_cast<SpecialInode *>(*it);
-        PRINT_CLASS(sinode);
-        dump_SpecialInode(sinode);
-      } 
-      else if (S_ISLNK((*it)->GetMode())){
-        std::cout << "Dump SymLink..." << std::endl;
-        SymLink *symlink = dynamic_cast<SymLink *>(*it);
-        PRINT_CLASS(symlink);
-        dump_SymLink(symlink);
-      }
-      else{
-        fprintf(stderr, "dump_state_pool has incorrect inode type %u", (*it)->GetMode());
-        ret = -EINVAL;
+      ret = dump_each_inode_type(it);
+      if (ret != 0){
         return ret;
       }
     }

@@ -149,7 +149,6 @@ int FuseRamFs::checkpoint(uint64_t key)
             std::cout << "Printing copy object mode: " << ((Inode*) file_inode_copy)->GetMode() << std::endl;
             std::cout << "Fetching m_buf... " << std::endl;
             std::cout << "Regular File handling ends..." << std::endl;
-            break;
         } else if (S_ISDIR(inode_mode)) {
             dir_inode_old = dynamic_cast<Directory *>(Inodes[i]);
             if (dir_inode_old == NULL){
@@ -192,6 +191,13 @@ int FuseRamFs::checkpoint(uint64_t key)
     std::cout << "copied_files size: " << copied_files.size() << std::endl;
     std::cout << "copied_files in checkpoint: " << copied_files[0]->GetMode() << std::endl;
     ret = insert_state(key, copied_files);
+    if (ret != 0){
+        goto err;
+    }
+    ret = dump_inodes_verifs2(Inodes, "After the checkpoint():");
+    if (ret != 0){
+        goto err;
+    }
     return ret;
 err:
     // clear copied_files vector
@@ -211,18 +217,22 @@ void FuseRamFs::invalidate_kernel_states()
         }
         /* Invalidate potential d-cache */
         if(S_ISDIR((*it)->GetMode())){
+            std::cout << "invalidate_kernel_states() gets dir dentry..." << std::endl;
             Directory *parent_dir = dynamic_cast<Directory *>(*it);
             /* If parent_dir has child dir*/
-            for (auto it_child = parent_dir->m_children.begin(); it_child != parent_dir->m_children.end(); ++it){
-                if (it_child->first == "." || it_child->first == "..") {
-                    continue;
+            std::cout << "Before fuse_lowlevel_notify_inval_entry() for loop..." << std::endl;
+            for (auto it_child = parent_dir->m_children.begin(); it_child != parent_dir->m_children.end(); ++it_child){
+                std::cout << "start for::::: " << std::endl;
+                std::cout << "Distance: " << std::distance(parent_dir->m_children.begin(), it_child) << std::endl;
+                if (it_child->second > 0 && it_child->first != "." && it_child->first != ".."){
+                    std::cout << "Before execute fuse_lowlevel_notify_inval_entry()..." << std::endl;
+                    fuse_lowlevel_notify_inval_entry(ch, (*it)->GetIno(), (it_child->first).c_str(), (it_child->first).size());
+                    std::cout << "After execute fuse_lowlevel_notify_inval_entry()..." << std::endl;
                 }
-                fuse_lowlevel_notify_inval_entry(ch, (*it)->GetIno(), (it_child->first).c_str(), 
-                    strlen((it_child->first).c_str()));      
             }
         }
     }
-
+    std::cout << "###################END OF invalidate_kernel_states..." << std::endl;
 }
 
 
@@ -230,40 +240,73 @@ int FuseRamFs::restore(uint64_t key)
 {
     // Lock
     std::shared_lock<std::shared_mutex> lk(crMutex);
-
-    std::vector <Inode *> stored_files = find_state(key);
-    std::vector <Inode *> newfiles (stored_files.size());
     int ret = 0;
+    std::vector <Inode *> stored_files = find_state(key);
+    std::vector <Inode *> newfiles;
+    ret = dump_inodes_verifs2(Inodes, "Before the restore():");
     if (stored_files.empty()){
         ret = -ENOENT;
         goto err;
     }
-    //invalidate_kernel_states();
-
-    copy(stored_files.begin(), stored_files.end(), newfiles.begin());
-    mode_t inode_mode;
-    File* file_inode;
-    for (std::vector<Inode *>::iterator it = newfiles.begin() ; it != newfiles.end(); ++it)
-    {
-        inode_mode = (*it)->GetMode();
-        if (S_ISREG(inode_mode)){
-            dynamic_cast<File *>(*it)->m_buf = NULL;
-        }
+    if (ret != 0){
+        goto err;
     }
+    invalidate_kernel_states();
 
-    for (unsigned i = 0; i < newfiles.size(); i++)
+    mode_t inode_mode;
+
+    File *file_inode_stored;
+    Directory *dir_inode_stored;
+    SpecialInode *special_inode_stored;
+    SymLink *symlink_inode_stored;
+
+    for (unsigned i = 0; i < stored_files.size(); i++)
     {
-        inode_mode = (newfiles[i])->GetMode();
+        inode_mode = stored_files[i]->GetMode();
         if (S_ISREG(inode_mode)){
-            file_inode = dynamic_cast<File *>(newfiles[i]);
-            size_t dsize = file_inode->UsedBlocks() * file_inode->BufBlockSize;
-            void *fdata = malloc(dsize);
-            if (!fdata) {
-                ret = -ENOMEM;
+            file_inode_stored = dynamic_cast<File *>(stored_files[i]);
+            if (file_inode_stored == NULL){
+                ret = -EBADF;
                 goto err;
             }
-            memcpy(fdata, dynamic_cast<File *>(stored_files[i])->m_buf, dsize);
-            file_inode->m_buf = fdata;
+            File *file_new = new File(* file_inode_stored);
+            newfiles.push_back((Inode*) file_new);
+        }
+        else if (S_ISDIR(inode_mode)) {
+            dir_inode_stored = dynamic_cast<Directory *>(stored_files[i]);
+            if (dir_inode_stored == NULL){
+                ret = -EBADF;
+                goto err;
+            }
+            Directory *dir_new = new Directory(*dir_inode_stored);
+            newfiles.push_back((Inode*) dir_new);            
+        }
+        else if (S_ISCHR(inode_mode) || S_ISBLK(inode_mode) || S_ISFIFO(inode_mode) || S_ISSOCK(inode_mode)) {
+            special_inode_stored = dynamic_cast<SpecialInode *>(stored_files[i]);
+            if (special_inode_stored == NULL){
+                ret = -EBADF;
+                goto err;
+            }
+            SpecialInode *special_inode_new = new SpecialInode(*special_inode_stored);
+            newfiles.push_back((Inode*) special_inode_new);
+        }
+        else if (S_ISLNK(inode_mode)){
+            symlink_inode_stored = dynamic_cast<SymLink *>(stored_files[i]);
+            if (symlink_inode_stored == NULL){
+                ret = -EBADF;
+                goto err;
+            }
+
+            SymLink *symlink_new = new SymLink(*symlink_inode_stored);
+            newfiles.push_back((Inode*) symlink_new);
+        }
+        else if (inode_mode == 0){
+            newfiles.push_back((Inode*) stored_files[i]);
+        }
+        else{
+            fprintf(stderr, "The restoration inode mode %u is not correct.", inode_mode);
+            ret = -EINVAL;
+            goto err;
         }
     }
     // clear old Inodes
@@ -272,6 +315,11 @@ int FuseRamFs::restore(uint64_t key)
     // clear stored_files
     std::vector<Inode *>().swap(stored_files);
     remove_state(key);
+    std::cout << "restore() in fuse_cpp_ramfs.cpp finished!" << std::endl;
+    ret = dump_inodes_verifs2(Inodes, "After the restore():");
+    if (ret != 0){
+        goto err;
+    }
     return 0;
 err:
     std::vector<Inode *>().swap(newfiles);

@@ -13,7 +13,6 @@ private:
     std::shared_mutex childrenRwSem;
 
     void UpdateSize(ssize_t delta);
-    friend class FuseRamFs;
 public:
     struct ReadDirCtx {
         off_t cookie;
@@ -29,6 +28,7 @@ public:
 
     static std::unordered_map<off_t, Directory::ReadDirCtx *> readdirStates;
     ReadDirCtx* PrepareReaddir(off_t cookie);
+    friend class FuseRamFs;
 public:
     ~Directory() {}
     Directory() {};

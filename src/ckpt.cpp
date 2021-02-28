@@ -5,7 +5,7 @@
 #include "fuse_cpp_ramfs.hpp"
 #include "testops.h"
 
-std::string MOUNTPOINT = "/mnt/test-verifs2";
+std::string MOUNTPOINT = VERIFS2_MOUNTPOINT;
 
 int main(int argc, char **argv)
 {
@@ -42,17 +42,29 @@ int main(int argc, char **argv)
         return ret;
     }
     
-    
+
     // create a directory
     ret = create_dir((MOUNTPOINT+testdir).c_str(), 0755);
     if(ret < 0){
         return ret;
     }
-    
+
+    /*
+    std::string test_inner_file = "/ckpt_test_dir/restore_ckpt_test_inner.txt";
+    //Write a file into the dir
+    char *inner_data = (char *)"Inner data testing for Checkpoint&Restore APIs";
+    ret = write_file((MOUNTPOINT+test_inner_file).c_str(), inner_data, 0, 46);
+    if(ret < 0){
+        return ret;
+    }
+    */
+
     printf("Before ioctl...\n");
     ret = ioctl(dirfd, VERIFS2_CHECKPOINT, (void *)key);
     if (ret != 0) {
         printf("Result: ret = %d, errno = %d\n", ret, errno);
     }
+
+    printf("CHECKPOINT: Running dump_state_pool() to dump current states\n");
     return (ret == 0) ? 0 : 1;
 }
