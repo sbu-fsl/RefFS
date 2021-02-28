@@ -4,7 +4,7 @@
 #include <cerrno>
 #include "cr.hpp"
 
-#define PRINT_CLASS(x) std::cout << "---Class Name: " << typeid(x).name() << std::endl
+#define PRINT_CLASS(x) std::cout << "Class Name: " << typeid(x).name() << std::endl
 #define PRINT_VAL(x) std::cout << #x" : " << x << std::endl
 
 std::unordered_map<uint64_t, std::vector <Inode *> > state_pool;
@@ -70,24 +70,24 @@ static int dump_each_inode_type(std::vector<Inode *>::iterator it)
 {
   int ret = 0;
   if (S_ISREG((*it)->GetMode())){
-    std::cout << "Dump File..." << std::endl;
+    std::cout << "---Dump File" << std::endl;
     File *file = dynamic_cast<File *>(*it);
     dump_File(file);
   } 
   else if (S_ISDIR((*it)->GetMode())){
-    std::cout << "Dump Directory..." << std::endl;
+    std::cout << "---Dump Directory" << std::endl;
     Directory *dir = dynamic_cast<Directory *>(*it);
     dump_Directory(dir);
   } 
   else if (S_ISCHR((*it)->GetMode()) || S_ISBLK((*it)->GetMode()) || S_ISFIFO((*it)->GetMode())
               || S_ISSOCK((*it)->GetMode()))
   {
-    std::cout << "Dump SpecialInode..." << std::endl;
+    std::cout << "---Dump SpecialInode" << std::endl;
     SpecialInode *sinode = dynamic_cast<SpecialInode *>(*it);
     dump_SpecialInode(sinode);
   } 
   else if (S_ISLNK((*it)->GetMode())){
-    std::cout << "Dump SymLink..." << std::endl;
+    std::cout << "---Dump SymLink" << std::endl;
     SymLink *symlink = dynamic_cast<SymLink *>(*it);
     dump_SymLink(symlink);
   }

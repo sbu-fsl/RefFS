@@ -29,10 +29,11 @@ int main(int argc, char **argv)
     int ret;
     std::string testfile = "/ckpt_test.txt";
     std::string testdir = "/ckpt_test_dir";
+    std::string test_inner_file = "/ckpt_test_dir/restore_ckpt_test_inner.txt";
 
     std::string testfile_renamed = "/ckpt_test_rename.txt";
     std::string testdir_renamed = "/ckpt_test_rename_dir";  
-
+    std::string test_inner_file_renamed = "/ckpt_test_dir/restore_ckpt_test_inner_rename.txt";
 
     /*
     // Comment it, because it triggers VeriFS2 bug -- after deletion 
@@ -48,10 +49,30 @@ int main(int argc, char **argv)
     }
     */
 
+
+    /* Change file content test */
+    char *edited_data = (char *)"_INJECT_SOME_TEXT_FOR_VERIFYING_RESTORATION_";
+    ret = write_file((MOUNTPOINT+testfile).c_str(), edited_data, 3, strlen(edited_data));
+    if(ret < 0){
+        return ret;
+    }
+
+    ret = write_file((MOUNTPOINT+test_inner_file).c_str(), edited_data, 5, strlen(edited_data));
+    if(ret < 0){
+        return ret;
+    }
+
+    /* Rename Test */
     ret = rename((MOUNTPOINT+testfile).c_str(), (MOUNTPOINT+testfile_renamed).c_str());
     if (ret != 0){
         goto err;
     }
+
+    ret = rename((MOUNTPOINT+test_inner_file).c_str(), (MOUNTPOINT+test_inner_file_renamed).c_str());
+    if (ret != 0){
+        goto err;
+    }
+
     ret = rename((MOUNTPOINT+testdir).c_str(), (MOUNTPOINT+testdir_renamed).c_str());
     if (ret != 0){
         goto err;

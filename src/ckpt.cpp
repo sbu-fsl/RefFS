@@ -37,34 +37,36 @@ int main(int argc, char **argv)
     }
     // write to a file
     char *data = (char *)"Checkpoint";
-    ret = write_file((MOUNTPOINT+testfile).c_str(), data, 0, 10);
+    ret = write_file((MOUNTPOINT+testfile).c_str(), data, 0, strlen(data));
     if(ret < 0){
         return ret;
     }
     
-
     // create a directory
     ret = create_dir((MOUNTPOINT+testdir).c_str(), 0755);
     if(ret < 0){
         return ret;
     }
 
-    /*
+    /* Testing for File on inner dir of mount point */
     std::string test_inner_file = "/ckpt_test_dir/restore_ckpt_test_inner.txt";
-    //Write a file into the dir
-    char *inner_data = (char *)"Inner data testing for Checkpoint&Restore APIs";
-    ret = write_file((MOUNTPOINT+test_inner_file).c_str(), inner_data, 0, 46);
+    // Create this inner file
+    ret = create_file((MOUNTPOINT+test_inner_file).c_str(), 0644);
     if(ret < 0){
         return ret;
     }
-    */
-
-    printf("Before ioctl...\n");
+    // Write this file into the dir
+    char *inner_data = (char *)"Inner data testing for Checkpoint&Restore APIs";
+    ret = write_file((MOUNTPOINT+test_inner_file).c_str(), inner_data, 0, strlen(inner_data));
+    if(ret < 0){
+        return ret;
+    }
+    
     ret = ioctl(dirfd, VERIFS2_CHECKPOINT, (void *)key);
     if (ret != 0) {
         printf("Result: ret = %d, errno = %d\n", ret, errno);
     }
 
-    printf("CHECKPOINT: Running dump_state_pool() to dump current states\n");
+    std::cout << "CHECKPOINT: Running dump_state_pool() to dump current states\n";
     return (ret == 0) ? 0 : 1;
 }
