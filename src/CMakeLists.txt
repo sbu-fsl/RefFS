@@ -1,4 +1,6 @@
 cmake_minimum_required(VERSION 3.2)
+#preprocessor for verifying Checkpoint/Restore APIs
+add_definitions(-DDUMP_TESTING)
 add_executable(fuse-cpp-ramfs main.cpp directory.cpp inode.cpp symlink.cpp file.cpp util.cpp fuse_cpp_ramfs.cpp special_inode.cpp cr.cpp)
 add_executable(ckpt ckpt.cpp testops.cpp)
 add_executable(restore restore.cpp testops.cpp)

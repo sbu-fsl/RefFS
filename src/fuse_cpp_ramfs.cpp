@@ -177,7 +177,9 @@ int FuseRamFs::checkpoint(uint64_t key)
     if (ret != 0){
         goto err;
     }
+    #ifdef DUMP_TESTING
     ret = dump_inodes_verifs2(Inodes, "After the checkpoint():");
+    #endif
     if (ret != 0){
         goto err;
     }
@@ -219,7 +221,9 @@ int FuseRamFs::restore(uint64_t key)
     int ret = 0;
     std::vector <Inode *> stored_files = find_state(key);
     std::vector <Inode *> newfiles;
+    #ifdef DUMP_TESTING
     ret = dump_inodes_verifs2(Inodes, "Before the restore():");
+    #endif
     if (stored_files.empty()){
         ret = -ENOENT;
         goto err;
@@ -291,7 +295,9 @@ int FuseRamFs::restore(uint64_t key)
     // clear stored_files
     std::vector<Inode *>().swap(stored_files);
     remove_state(key);
+    #ifdef DUMP_TESTING
     ret = dump_inodes_verifs2(Inodes, "After the restore():");
+    #endif
     if (ret != 0){
         goto err;
     }
