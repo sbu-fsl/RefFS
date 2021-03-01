@@ -18,8 +18,6 @@ SymLink::SymLink(SymLink &obj)
     m_markedForDeletion = obj.m_markedForDeletion;
     m_nlookup.store(obj.m_nlookup);
     m_xattr = obj.m_xattr;
-    //entryRwSem(obj.entryRwSem);
-    //xattrRwSem(obj.xattrRwSem);
 }
 
 int SymLink::WriteAndReply(fuse_req_t req, const char *buf, size_t size, off_t off) {

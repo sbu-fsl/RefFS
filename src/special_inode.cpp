@@ -23,8 +23,6 @@ SpecialInode::SpecialInode(SpecialInode &obj)
     m_markedForDeletion = obj.m_markedForDeletion;
     m_nlookup.store(obj.m_nlookup);
     m_xattr = obj.m_xattr;
-    //entryRwSem(obj.entryRwSem);
-    //xattrRwSem(obj.xattrRwSem);
 }
 
 enum SpecialInodeTypes SpecialInode::Type() {
