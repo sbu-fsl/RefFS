@@ -7,6 +7,9 @@
 #define PRINT_CLASS(x) std::cout << "Class Name: " << typeid(x).name() << std::endl
 #define PRINT_VAL(x) std::cout << #x" : " << x << std::endl
 
+static bool isExistInDeleted(fuse_ino_t curr_ino, std::queue<fuse_ino_t> DeletedInodes);
+static void print_ino_queue(std::queue<fuse_ino_t> DeletedInodes);
+
 std::unordered_map<uint64_t, std::vector <Inode *> > state_pool;
 
 int insert_state(uint64_t key, std::vector <Inode *> inode_vec)
@@ -102,24 +105,64 @@ static int dump_each_inode_type(std::vector<Inode *>::iterator it)
 }
 
 
-static int _dump_inodes_verifs2(std::vector<Inode *> Inodes)
+static int _dump_inodes_verifs2(std::vector<Inode *> Inodes, 
+                                std::queue<fuse_ino_t> DeletedInodes)
 {
-  int ret;
+  int ret; 
   for (std::vector<Inode *>::iterator it = Inodes.begin(); it != Inodes.end(); ++it){
-    ret = dump_each_inode_type(it);
-    if (ret != 0){
-      return ret;
+    // Print current DeletedInodes
+    print_ino_queue(DeletedInodes);
+    int dist = std::distance(Inodes.begin(), it);
+    if (dist == 0){
+      continue;
+    }
+    // If this inode is not in DeletedInodes
+    fuse_ino_t curr_ino = (fuse_ino_t)dist;
+    if (!isExistInDeleted(curr_ino, DeletedInodes)){
+      ret = dump_each_inode_type(it);
+      if (ret != 0){
+        return ret;
+      }
+    }
+    else{
+      std::cout << "\033[1;36m***Inode number " << curr_ino 
+                << " had been deleted\033[0m\n";
     }
   }
   return ret;
 }
 
+static bool isExistInDeleted(fuse_ino_t curr_ino, std::queue<fuse_ino_t> DeletedInodes)
+{
+  bool ret = false;
+  while(!DeletedInodes.empty()){
+    if (DeletedInodes.front() == curr_ino){
+      ret = true;
+      break;
+    }
+    DeletedInodes.pop();
+  }
+  return ret;
+}
 
-int dump_inodes_verifs2(std::vector<Inode *> Inodes, std::string info)
+static void print_ino_queue(std::queue<fuse_ino_t> DeletedInodes)
+{
+  std::cout << "Print out Queue: ";
+  while (!DeletedInodes.empty())
+  {
+    std::cout << DeletedInodes.front() << " ";
+    DeletedInodes.pop();
+  }
+  std::cout << std::endl;
+}
+
+
+int dump_inodes_verifs2(std::vector<Inode *> Inodes, std::queue<fuse_ino_t> DeletedInodes, 
+                        std::string info)
 {
   std::cout << "\033[1;35m" + info + "\033[0m" << std::endl;
   std::cout << "Size of Inodes: " << Inodes.size() << std::endl;
-  int ret = _dump_inodes_verifs2(Inodes);
+  int ret = _dump_inodes_verifs2(Inodes, DeletedInodes);
   std::cout << "\033[1;32mdump_inodes_verifs2 Finished!\033[0m" << std::endl;
   return ret;
 }

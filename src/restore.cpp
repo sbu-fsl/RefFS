@@ -35,7 +35,7 @@ int main(int argc, char **argv)
     std::string testdir_renamed = "/ckpt_test_rename_dir";  
     std::string test_inner_file_renamed = "/ckpt_test_dir/restore_ckpt_test_inner_rename.txt";
 
-    /*
+    
     // Comment it, because it triggers VeriFS2 bug -- after deletion 
     // Inodes size is the still before deletion while data has been removed
     // So it will have segmentation fault
@@ -43,14 +43,19 @@ int main(int argc, char **argv)
     if (ret != 0){
         goto err;
     }
+    ret = unlink_file((MOUNTPOINT+test_inner_file).c_str());
+    if (ret != 0){
+        goto err;
+    }
     ret = remove_dir((MOUNTPOINT+testdir).c_str());
     if (ret != 0){
         goto err;
     }
-    */
+    
 
 
-    /* Change file content test */
+    /*
+    // Change file content test
     char *edited_data = (char *)"_INJECT_SOME_TEXT_FOR_VERIFYING_RESTORATION_";
     ret = write_file((MOUNTPOINT+testfile).c_str(), edited_data, 3, strlen(edited_data));
     if(ret < 0){
@@ -62,7 +67,7 @@ int main(int argc, char **argv)
         return ret;
     }
 
-    /* Rename Test */
+    // Rename Test
     ret = rename((MOUNTPOINT+testfile).c_str(), (MOUNTPOINT+testfile_renamed).c_str());
     if (ret != 0){
         goto err;
@@ -77,6 +82,7 @@ int main(int argc, char **argv)
     if (ret != 0){
         goto err;
     }
+    */
 
     ret = ioctl(dirfd, VERIFS2_RESTORE, (void *)key);
     if (ret != 0) {

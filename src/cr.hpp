@@ -26,7 +26,8 @@ void dump_File(File* file);
 void dump_Directory(Directory* dir);
 void dump_SpecialInode(SpecialInode* sinode);
 void dump_SymLink(SymLink* symlink);
-int dump_inodes_verifs2(std::vector<Inode *> Inodes, std::string info);
+int dump_inodes_verifs2(std::vector<Inode *> Inodes, std::queue<fuse_ino_t> DeletedInodes, 
+                        std::string info);
 int dump_state_pool();
 
 #endif

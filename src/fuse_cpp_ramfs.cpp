@@ -178,7 +178,7 @@ int FuseRamFs::checkpoint(uint64_t key)
         goto err;
     }
     #ifdef DUMP_TESTING
-    ret = dump_inodes_verifs2(Inodes, "After the checkpoint():");
+    ret = dump_inodes_verifs2(Inodes, DeletedInodes, "After the checkpoint():");
     #endif
     if (ret != 0){
         goto err;
@@ -222,7 +222,7 @@ int FuseRamFs::restore(uint64_t key)
     std::vector <Inode *> stored_files = find_state(key);
     std::vector <Inode *> newfiles;
     #ifdef DUMP_TESTING
-    ret = dump_inodes_verifs2(Inodes, "Before the restore():");
+    ret = dump_inodes_verifs2(Inodes, DeletedInodes, "Before the restore():");
     #endif
     if (stored_files.empty()){
         ret = -ENOENT;
@@ -296,7 +296,7 @@ int FuseRamFs::restore(uint64_t key)
     std::vector<Inode *>().swap(stored_files);
     remove_state(key);
     #ifdef DUMP_TESTING
-    ret = dump_inodes_verifs2(Inodes, "After the restore():");
+    ret = dump_inodes_verifs2(Inodes, DeletedInodes, "After the restore():");
     #endif
     if (ret != 0){
         goto err;
@@ -935,7 +935,7 @@ void FuseRamFs::FuseUnlink(fuse_req_t req, fuse_ino_t parent, const char *name)
     
     // Update the number of hardlinks in the target
     inode_p->RemoveHardLink();
-    
+
     // Reply with no error. TODO: Where is ESUCCESS?
     fuse_reply_err(req, 0);
 }
