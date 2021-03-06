@@ -18,8 +18,9 @@
 #define VERIFS2_CHECKPOINT  VERIFS2_IOC(1)
 #define VERIFS2_RESTORE     VERIFS2_IOC(2)
 
-int insert_state(uint64_t key, std::vector <Inode *> inode_vec);
-std::vector <Inode *> find_state(uint64_t key);
+int insert_state(uint64_t key, 
+                std::tuple<std::vector <Inode *>, std::queue<fuse_ino_t>> fs_states_vec);
+std::tuple<std::vector <Inode *>, std::queue<fuse_ino_t>> find_state(uint64_t key);
 int remove_state(uint64_t key);
 
 void dump_File(File* file);

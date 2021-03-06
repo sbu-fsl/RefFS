@@ -10,24 +10,27 @@
 bool isExistInDeleted(fuse_ino_t curr_ino, std::queue<fuse_ino_t> DeletedInodes);
 void print_ino_queue(std::queue<fuse_ino_t> DeletedInodes);
 
-std::unordered_map<uint64_t, std::vector <Inode *> > state_pool;
+std::unordered_map<uint64_t, std::tuple<std::vector <Inode *>, std::queue<fuse_ino_t>> > state_pool;
 
-int insert_state(uint64_t key, std::vector <Inode *> inode_vec)
+int insert_state(uint64_t key, 
+                  std::tuple<std::vector <Inode *>, std::queue<fuse_ino_t>> fs_states_vec)
 {
   auto it = state_pool.find(key);
   if (it != state_pool.end()) {
     return -EEXIST;
   }
-  state_pool.insert({key, inode_vec});
+  state_pool.insert({key, fs_states_vec});
 
   return 0;
 }
 
-std::vector <Inode *> find_state(uint64_t key)
+std::tuple<std::vector <Inode *>, std::queue<fuse_ino_t>> 
+find_state(uint64_t key)
 {
   auto it = state_pool.find(key);
   if (it == state_pool.end()) {
-    return std::vector<Inode *>();
+    std::queue<fuse_ino_t> empty_queue;
+    return std::tuple<std::vector <Inode *>, std::queue<fuse_ino_t>>{std::vector <Inode *>(), empty_queue};
   } else {
     return it->second;
   }
@@ -110,12 +113,7 @@ static int _dump_inodes_verifs2(std::vector<Inode *> Inodes,
 {
   int ret; 
   for (std::vector<Inode *>::iterator it = Inodes.begin(); it != Inodes.end(); ++it){
-    // Print current DeletedInodes
-    print_ino_queue(DeletedInodes);
     int dist = std::distance(Inodes.begin(), it);
-    if (dist == 0){
-      continue;
-    }
     // If this inode is not in DeletedInodes
     fuse_ino_t curr_ino = (fuse_ino_t)dist;
     if (!isExistInDeleted(curr_ino, DeletedInodes)){
@@ -178,7 +176,7 @@ int dump_state_pool()
     std::cout << "\033[1;35mDump the "<< state_cnt <<"-th state\033[0m\n";
     state_cnt++;
     key = each_state.first;
-    value_inode = each_state.second;
+    value_inode = std::get<0>(each_state.second);
     std::cout << "Key: " << each_state.first << std::endl;
     std::cout << "value_inode.size(): " << value_inode.size() << std::endl;
     for (std::vector<Inode *>::iterator it = value_inode.begin(); it != value_inode.end(); ++it){
