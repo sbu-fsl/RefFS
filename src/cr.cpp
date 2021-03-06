@@ -7,8 +7,8 @@
 #define PRINT_CLASS(x) std::cout << "Class Name: " << typeid(x).name() << std::endl
 #define PRINT_VAL(x) std::cout << #x" : " << x << std::endl
 
-static bool isExistInDeleted(fuse_ino_t curr_ino, std::queue<fuse_ino_t> DeletedInodes);
-static void print_ino_queue(std::queue<fuse_ino_t> DeletedInodes);
+bool isExistInDeleted(fuse_ino_t curr_ino, std::queue<fuse_ino_t> DeletedInodes);
+void print_ino_queue(std::queue<fuse_ino_t> DeletedInodes);
 
 std::unordered_map<uint64_t, std::vector <Inode *> > state_pool;
 
@@ -132,7 +132,7 @@ static int _dump_inodes_verifs2(std::vector<Inode *> Inodes,
   return ret;
 }
 
-static bool isExistInDeleted(fuse_ino_t curr_ino, std::queue<fuse_ino_t> DeletedInodes)
+bool isExistInDeleted(fuse_ino_t curr_ino, std::queue<fuse_ino_t> DeletedInodes)
 {
   bool ret = false;
   while(!DeletedInodes.empty()){
@@ -145,7 +145,7 @@ static bool isExistInDeleted(fuse_ino_t curr_ino, std::queue<fuse_ino_t> Deleted
   return ret;
 }
 
-static void print_ino_queue(std::queue<fuse_ino_t> DeletedInodes)
+void print_ino_queue(std::queue<fuse_ino_t> DeletedInodes)
 {
   std::cout << "Print out Queue: ";
   while (!DeletedInodes.empty())

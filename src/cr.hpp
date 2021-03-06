@@ -29,5 +29,7 @@ void dump_SymLink(SymLink* symlink);
 int dump_inodes_verifs2(std::vector<Inode *> Inodes, std::queue<fuse_ino_t> DeletedInodes, 
                         std::string info);
 int dump_state_pool();
+bool isExistInDeleted(fuse_ino_t curr_ino, std::queue<fuse_ino_t> DeletedInodes);
+void print_ino_queue(std::queue<fuse_ino_t> DeletedInodes);
 
 #endif

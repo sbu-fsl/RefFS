@@ -195,6 +195,10 @@ err:
 void FuseRamFs::invalidate_kernel_states()
 {
     for (std::vector<Inode *>::iterator it = Inodes.begin(); it != Inodes.end(); ++it){
+        fuse_ino_t i = (fuse_ino_t) std::distance(Inodes.begin(), it);
+        if (isExistInDeleted(i, DeletedInodes)){
+            continue;
+        }
         /* Invalidate possible kernel inode cache */
         // if m_markedForDeletion is false (the inode exists and is not marked as deleted)
         if (!(*it)->m_markedForDeletion){
@@ -220,10 +224,12 @@ int FuseRamFs::restore(uint64_t key)
     std::shared_lock<std::shared_mutex> lk(crMutex);
     int ret = 0;
     std::vector <Inode *> stored_files = find_state(key);
-    std::vector <Inode *> newfiles;
     #ifdef DUMP_TESTING
     ret = dump_inodes_verifs2(Inodes, DeletedInodes, "Before the restore():");
     #endif
+    // Restore DeletedInodes First
+
+    std::vector <Inode *> newfiles;
     if (stored_files.empty()){
         ret = -ENOENT;
         goto err;
@@ -242,6 +248,10 @@ int FuseRamFs::restore(uint64_t key)
 
     for (unsigned i = 0; i < stored_files.size(); i++)
     {
+        if (isExistInDeleted((fuse_ino_t)i, DeletedInodes)){
+            newfiles.push_back((Inode*) NULL);
+            continue;
+        }
         inode_mode = stored_files[i]->GetMode();
         if (S_ISREG(inode_mode)){
             file_inode_stored = dynamic_cast<File *>(stored_files[i]);
