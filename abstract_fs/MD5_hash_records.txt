@@ -1,0 +1,21 @@
+03/07 15:52 (300 s racer without any link ops single-thread):
+27af97678713e9a27acdf21f68e13b7b
+
+---Enable Verifs2 Dumping (FAILED):
+03/07 15:52 (30 s racer without any link ops single-thread):
+ba57cb504c8e13db0b40a3b7c1647eeb
+>>Checkpointed
+Run another 30 s racer without any link ops single-thread
+>>Restored
+493450a7bf12a670df24c0b2e54ee516
+
+
+---Disable Verifs2 Dumping:
+03/07 16:41 (30 s racer without any link ops single-thread):
+83c6847cc1eb7a40281c80af4466afa4
+>>Checkpointed
+966a2892b563cd35cbce32365caa7f5b
+Run another 30 s racer without any link ops single-thread
+97267399a8f013574dc9ebb0c739d3f0
+>>Restored
+966a2892b563cd35cbce32365caa7f5b

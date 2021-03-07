@@ -121,8 +121,12 @@ int FuseRamFs::checkpoint(uint64_t key)
 
     for (unsigned i = 0; i < Inodes.size(); i++)
     {
+        if (isExistInDeleted((fuse_ino_t)i, DeletedInodes)){
+            copied_files.push_back((Inode*) NULL);
+            continue;
+        }
+        
         inode_mode = Inodes[i]->GetMode();
-
         if (S_ISREG(inode_mode)){
             file_inode_old = dynamic_cast<File *>(Inodes[i]);
             if (file_inode_old == NULL){
