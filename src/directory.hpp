@@ -32,7 +32,9 @@ public:
 public:
     ~Directory() {}
     Directory() {};
-    Directory(Directory &obj);
+    Directory(const Directory &d) : Inode(d) {
+      m_children = d.m_children;
+    }
 
     void Initialize(fuse_ino_t ino, mode_t mode, nlink_t nlink, gid_t gid, uid_t uid);
     fuse_ino_t _ChildInodeNumberWithName(const std::string &name);

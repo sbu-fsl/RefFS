@@ -10,9 +10,18 @@ private:
     void *m_buf;
     
 public:
-    File (File &obj);
     File() :
     m_buf(NULL) {}
+
+    File(const File &f) : Inode(f){
+        size_t bufsize = f.m_fuseEntryParam.attr.st_size; 
+        m_buf = malloc(bufsize);
+        if (!m_buf){
+            std::cerr << "malloc failed for File copy constructor\n";
+            exit(EXIT_FAILURE);
+        }
+        memcpy(m_buf, f.m_buf, bufsize);
+    };
     
     ~File();
     

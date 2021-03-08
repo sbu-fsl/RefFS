@@ -10,10 +10,13 @@ private:
     std::string m_link;
     
 public:
-    SymLink(SymLink& obj);
     SymLink(const std::string &link) :
     m_link(link) {};
-    
+
+    SymLink(const SymLink &sym) : Inode(sym) {
+      m_link = sym.m_link;
+    }
+
     ~SymLink() {};
     
     int WriteAndReply(fuse_req_t req, const char *buf, size_t size, off_t off);

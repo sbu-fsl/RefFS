@@ -22,12 +22,18 @@ public:
     static const size_t BufBlockSize = 512;
     
 public:
-    Inode (const Inode &obj) {};
     Inode() :
     m_markedForDeletion(false),
     m_nlookup(0)
     {}
-    
+
+    Inode(const Inode &src) {
+      m_markedForDeletion = src.m_markedForDeletion;
+      m_nlookup.store(src.m_nlookup.load());
+      m_fuseEntryParam = src.m_fuseEntryParam;
+      m_xattr = src.m_xattr;
+    }
+
     virtual ~Inode() = 0;
     
     virtual int WriteAndReply(fuse_req_t req, const char *buf, size_t size, off_t off) = 0;

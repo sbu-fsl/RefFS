@@ -8,26 +8,6 @@
 #include "fuse_cpp_ramfs.hpp"
 #include "file.hpp"
 
-
-File::File(File& obj){
-    // Special for File
-    m_buf = NULL;
-    size_t datasz = obj.UsedBlocks() * obj.BufBlockSize;
-    int ret;
-    void *fdata = malloc(datasz);
-    if (!fdata){
-        std::cerr << "malloc failed for File copy constructor\n";
-        exit(EXIT_FAILURE);
-    }
-    memcpy(fdata, obj.m_buf, datasz);
-    m_buf = fdata;
-    // Common in Inode
-    m_fuseEntryParam = obj.m_fuseEntryParam;
-    m_markedForDeletion = obj.m_markedForDeletion;
-    m_nlookup.store(obj.m_nlookup);
-    m_xattr = obj.m_xattr;
-}
-
 File::~File() {
     free(m_buf);
 }

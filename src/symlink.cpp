@@ -8,18 +8,6 @@
 #include "inode.hpp"
 #include "symlink.hpp"
 
-
-SymLink::SymLink(SymLink &obj)
-{
-    // Special for Directory
-    m_link =obj.m_link;
-    // Common in Inode
-    m_fuseEntryParam = obj.m_fuseEntryParam;
-    m_markedForDeletion = obj.m_markedForDeletion;
-    m_nlookup.store(obj.m_nlookup);
-    m_xattr = obj.m_xattr;
-}
-
 int SymLink::WriteAndReply(fuse_req_t req, const char *buf, size_t size, off_t off) {
     return fuse_reply_err(req, EISDIR);
 }
