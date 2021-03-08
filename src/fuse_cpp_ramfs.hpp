@@ -23,7 +23,7 @@ private:
     
     static std::vector<Inode *> Inodes;
     static std::shared_mutex inodesRwSem;
-    static std::shared_mutex crMutex;
+    //static std::shared_mutex crMutex;
     static std::queue<fuse_ino_t> DeletedInodes;
     static std::mutex deletedInodesMutex;
     static struct statvfs m_stbuf;
