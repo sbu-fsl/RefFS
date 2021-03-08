@@ -22,7 +22,7 @@ using namespace std;
  */
 vector<Inode *> FuseRamFs::Inodes = vector<Inode *>();
 std::shared_mutex FuseRamFs::inodesRwSem;
-//std::shared_mutex FuseRamFs::crMutex;
+std::shared_mutex FuseRamFs::crMutex;
 
 /**
  The Inodes which have been deleted.
@@ -108,7 +108,7 @@ FuseRamFs::~FuseRamFs()
 int FuseRamFs::checkpoint(uint64_t key)
 {
     // Lock
-    //std::shared_lock<std::shared_mutex> lk(crMutex);
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     int ret = 0;
     std::vector <Inode *> copied_files = std::vector<Inode *>();
 
@@ -225,7 +225,7 @@ void FuseRamFs::invalidate_kernel_states()
 int FuseRamFs::restore(uint64_t key)
 {
     // Lock
-    //std::shared_lock<std::shared_mutex> lk(crMutex);
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     int ret = 0;
     #ifdef DUMP_TESTING
     ret = dump_inodes_verifs2(Inodes, DeletedInodes, "Before the restore():");

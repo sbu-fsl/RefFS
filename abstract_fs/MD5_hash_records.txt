@@ -1,48 +1,60 @@
-03/07 15:52 (300 s racer without any link ops single-thread):
-27af97678713e9a27acdf21f68e13b7b
-
----Enable Verifs2 Dumping (FAILED):
-03/07 15:52 (30 s racer without any link ops single-thread):
-ba57cb504c8e13db0b40a3b7c1647eeb
->>Checkpointed
-Run another 30 s racer without any link ops single-thread
->>Restored
-493450a7bf12a670df24c0b2e54ee516
+Template:
+---Do not conduct any file system operation in ckpt/restore driver programs
+* When just mounted and file system is empty
+* 03/07 19:52 (30 s racer without any link ops single-thread):
+>> Checkpointed:
+* Run another 30 s racer without any link ops single-thread:
+>>Restored:
 
 
----Disable Verifs2 Dumping (FAILED):
-03/07 16:41 (30 s racer without any link ops single-thread):
-83c6847cc1eb7a40281c80af4466afa4
->>Checkpointed
-966a2892b563cd35cbce32365caa7f5b
-Run another 30 s racer without any link ops single-thread
-97267399a8f013574dc9ebb0c739d3f0
->>Restored
-966a2892b563cd35cbce32365caa7f5b
-
----Disable crMutex and crLock (FAILED):
-03/07 16:53 (30 s racer without any link ops single-thread):
-a97cdc25132788f2d352ce619bfbf985
->>Checkpointed
-07213ef76d160b4a24b779c97bc7208a
-Run another 30 s racer without any link ops single-thread
-99e83c9050b6036564fd5f95071fabbf
->>Restored
-07213ef76d160b4a24b779c97bc7208a
-
-
----Replace NULL with nullptr
-Empty just mounted fs:
+-----Without running file_link.sh file_symlink.sh in racer & no CR lock
+---Do not conduct any file system operation in ckpt/restore driver programs
+* When just mounted and file system is empty
 c41b437e6d67b4edfed20c98da905cf8
-03/07 17:36 (30 s racer without any link ops single-thread):
-27b70ccfceb1b7381986d4232efda453
->>Checkpointed
-c473f8fb9a50a0a6e07e774a4928bf98
-Run another 30 s racer without any link ops single-thread
-cf930cc3f0a2d2f29782ff7b7003f902
->>Restored
-c473f8fb9a50a0a6e07e774a4928bf98
+* 03/07 19:52 (30 s racer without any link ops single-thread):
+4d431779a244c268c0ff5f03c8bc30c9
+>> Checkpointed:
+4d431779a244c268c0ff5f03c8bc30c9
+* Run another 30 s racer without any link ops single-thread:
+61bcbfe5ac25106e6a69e36c27c246e3
+>>Restored:
+4d431779a244c268c0ff5f03c8bc30c9
 
 
----Refactor Inode and other derived class copy constructors
+-----Without running file_link.sh file_symlink.sh in racer & no CR lock
+---30s racer to 300s racer
+* When just mounted and file system is empty
+c41b437e6d67b4edfed20c98da905cf8
+* 03/07 20:00 (300 s racer without any link ops single-thread):
+80512c21f3ce16fd0b5e1a8b2d6376f6
+>> Checkpointed:
+80512c21f3ce16fd0b5e1a8b2d6376f6
+* Run another 300 s racer without any link ops single-thread:
+bb4ccae5aa5bda9bc88963f2c4800465
+>>Restored:
+80512c21f3ce16fd0b5e1a8b2d6376f6
+
+
+-----Without running file_link.sh file_symlink.sh in racer 
+---30s racer & Enable CR lock
+* When just mounted and file system is empty
+c41b437e6d67b4edfed20c98da905cf8
+* 03/07 20:20 (30 s racer without any link ops single-thread):
+15ccca5343aea636097cde5a90a9516e
+>> Checkpointed:
+15ccca5343aea636097cde5a90a9516e
+* Run another 30 s racer without any link ops single-thread:
+9df321bbbeab738e22bd8642f47b9f20
+>>Restored:
+15ccca5343aea636097cde5a90a9516e
+
+
+-----ENABLE running file_link.sh file_symlink.sh in racer [FAILED]
+---30s racer & Enable CR lock
+* When just mounted and file system is empty
+c41b437e6d67b4edfed20c98da905cf8
+* 03/07 20:22 (30 s racer without any link ops single-thread):
+GOT [Segmentation fault (core dumped)]
+
+
 

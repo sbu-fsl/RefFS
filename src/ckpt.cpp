@@ -26,7 +26,8 @@ int main(int argc, char **argv)
     }
 
     int ret;
-    /* do some file system operations */
+    /*
+    // do some file system operations
     // create a file
     
     std::string testfile = "/ckpt_test.txt";
@@ -48,7 +49,7 @@ int main(int argc, char **argv)
         return ret;
     }
 
-    /* Testing for File on inner dir of mount point */
+    // Testing for File on inner dir of mount point
     std::string test_inner_file = "/ckpt_test_dir/restore_ckpt_test_inner.txt";
     // Create this inner file
     ret = create_file((MOUNTPOINT+test_inner_file).c_str(), 0644);
@@ -61,7 +62,8 @@ int main(int argc, char **argv)
     if(ret < 0){
         return ret;
     }
-    
+    */
+
     ret = ioctl(dirfd, VERIFS2_CHECKPOINT, (void *)key);
     if (ret != 0) {
         printf("Result: ret = %d, errno = %d\n", ret, errno);

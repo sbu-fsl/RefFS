@@ -25,8 +25,10 @@ int main(int argc, char **argv)
         exit(1);
     }
 
-    // Remove existing files and dirs
     int ret;
+
+    /*
+    // Remove existing files and dirs
     std::string testfile = "/ckpt_test.txt";
     std::string testdir = "/ckpt_test_dir";
     std::string test_inner_file = "/ckpt_test_dir/restore_ckpt_test_inner.txt";
@@ -52,9 +54,7 @@ int main(int argc, char **argv)
         goto err;
     }
     
-
-
-    /*
+    
     // Change file content test
     char *edited_data = (char *)"_INJECT_SOME_TEXT_FOR_VERIFYING_RESTORATION_";
     ret = write_file((MOUNTPOINT+testfile).c_str(), edited_data, 3, strlen(edited_data));
@@ -82,7 +82,7 @@ int main(int argc, char **argv)
     if (ret != 0){
         goto err;
     }
-    */
+    */    
 
     ret = ioctl(dirfd, VERIFS2_RESTORE, (void *)key);
     if (ret != 0) {
