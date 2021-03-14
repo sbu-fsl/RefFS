@@ -1299,7 +1299,7 @@ void FuseRamFs::FuseSymlink(fuse_req_t req, const char *link, fuse_ino_t parent,
     }
 
     /* Check free space and free inodes */
-    if (FuseRamFs::CheckHasSpaceFor(nullptr, strnlen(name, PATH_MAX))) {
+    if (!FuseRamFs::CheckHasSpaceFor(nullptr, strnlen(name, PATH_MAX))) {
         fuse_reply_err(req, ENOSPC);
     }
     if (FuseRamFs::GetFreeInodes() <= 0) {
