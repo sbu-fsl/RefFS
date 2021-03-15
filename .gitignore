@@ -4,3 +4,4 @@ tmp/
 *.log
 .vscode/
 tests/test_symlink.sh
+abstract_fs_test/
