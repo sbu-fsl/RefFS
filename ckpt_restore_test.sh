@@ -9,3 +9,5 @@ make
 sudo make install
 sudo umount -l /mnt/test-verifs2
 sudo rm -rf /mnt/test-verifs2/*
+sudo umount -l /mnt/test-verifs1
+sudo rm -rf /mnt/test-verifs1/*

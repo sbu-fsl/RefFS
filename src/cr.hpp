@@ -19,8 +19,8 @@
 #define VERIFS2_RESTORE     VERIFS2_IOC(2)
 
 int insert_state(uint64_t key, 
-                std::tuple<std::vector <Inode *>, std::queue<fuse_ino_t>> fs_states_vec);
-std::tuple<std::vector <Inode *>, std::queue<fuse_ino_t>> find_state(uint64_t key);
+                std::tuple<std::vector <Inode *>, std::queue<fuse_ino_t>, struct statvfs> fs_states_vec);
+std::tuple<std::vector <Inode *>, std::queue<fuse_ino_t>, struct statvfs> find_state(uint64_t key);
 int remove_state(uint64_t key);
 
 void dump_File(File* file);

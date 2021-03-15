@@ -10,10 +10,11 @@
 bool isExistInDeleted(fuse_ino_t curr_ino, std::queue<fuse_ino_t> DeletedInodes);
 void print_ino_queue(std::queue<fuse_ino_t> DeletedInodes);
 
-std::unordered_map<uint64_t, std::tuple<std::vector <Inode *>, std::queue<fuse_ino_t>> > state_pool;
+std::unordered_map<uint64_t, std::tuple<std::vector <Inode *>, std::queue<fuse_ino_t>, struct statvfs> > state_pool;
 
 int insert_state(uint64_t key, 
-                  std::tuple<std::vector <Inode *>, std::queue<fuse_ino_t>> fs_states_vec)
+                  std::tuple<std::vector <Inode *>, std::queue<fuse_ino_t>, 
+                  struct statvfs> fs_states_vec)
 {
   auto it = state_pool.find(key);
   if (it != state_pool.end()) {
@@ -24,13 +25,14 @@ int insert_state(uint64_t key,
   return 0;
 }
 
-std::tuple<std::vector <Inode *>, std::queue<fuse_ino_t>> 
+std::tuple<std::vector <Inode *>, std::queue<fuse_ino_t>, struct statvfs> 
 find_state(uint64_t key)
 {
   auto it = state_pool.find(key);
   if (it == state_pool.end()) {
     std::queue<fuse_ino_t> empty_queue;
-    return std::tuple<std::vector <Inode *>, std::queue<fuse_ino_t>>{std::vector <Inode *>(), empty_queue};
+    struct statvfs empty_statvfs = {};
+    return std::tuple<std::vector <Inode *>, std::queue<fuse_ino_t>, struct statvfs>{std::vector <Inode *>(), empty_queue, empty_statvfs};
   } else {
     return it->second;
   }

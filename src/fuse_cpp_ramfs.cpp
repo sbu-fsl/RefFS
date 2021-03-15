@@ -177,7 +177,7 @@ int FuseRamFs::checkpoint(uint64_t key)
         }
     }
     // insert state
-    ret = insert_state(key, std::make_tuple(copied_files, DeletedInodes));
+    ret = insert_state(key, std::make_tuple(copied_files, DeletedInodes, m_stbuf));
     if (ret != 0){
         goto err;
     }
@@ -234,10 +234,11 @@ int FuseRamFs::restore(uint64_t key)
         return ret;
     }
     #endif
-    std::tuple<std::vector <Inode *>, std::queue<fuse_ino_t>> stored_states = find_state(key);
+    std::tuple<std::vector <Inode *>, std::queue<fuse_ino_t>, struct statvfs> stored_states = find_state(key);
 
     std::vector <Inode *> stored_files = std::get<0>(stored_states);
     std::queue<fuse_ino_t> stored_DeletedInodes = std::get<1>(stored_states);
+    struct statvfs stored_m_stbuf = std::get<2>(stored_states);
 
     if (stored_files.empty() && stored_DeletedInodes.empty()){
         ret = -ENOENT;
@@ -251,6 +252,9 @@ int FuseRamFs::restore(uint64_t key)
     std::queue<fuse_ino_t> tmp_DeletedInodes = DeletedInodes;
     // Restore DeletedInodes First
     DeletedInodes = stored_DeletedInodes;
+    // Then restore m_stbuf
+    struct statvfs tmp_m_stbuf = m_stbuf;
+    m_stbuf = stored_m_stbuf;
 
     std::vector <Inode *> newfiles;
     mode_t inode_mode;
@@ -334,6 +338,7 @@ err:
     std::cerr << "Restoration went to error.\n";
     std::vector<Inode *>().swap(newfiles);
     DeletedInodes = tmp_DeletedInodes;
+    m_stbuf = tmp_m_stbuf;
     return ret;
 }
 
