@@ -428,6 +428,7 @@ void FuseRamFs::FuseDestroy(void *userdata)
  */
 void FuseRamFs::FuseLookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *parentInode = GetInode(parent);
     if (parentInode == nullptr || parentInode->HasNoLinks()) {
         fuse_reply_err(req, ENOENT);
@@ -466,6 +467,7 @@ void FuseRamFs::FuseLookup(fuse_req_t req, fuse_ino_t parent, const char *name)
  */
 void FuseRamFs::FuseGetAttr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *inode = GetInode(ino);
     /* return enoent if this inode has been deleted */
     if (inode == nullptr || inode->HasNoLinks()) {
@@ -488,6 +490,7 @@ void FuseRamFs::FuseGetAttr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_inf
  */
 void FuseRamFs::FuseSetAttr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, int to_set, struct fuse_file_info *fi)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *inode = GetInode(ino);
     /* return enoent if this inode has been deleted */
     if (inode == nullptr || inode->HasNoLinks()) {
@@ -529,6 +532,7 @@ void FuseRamFs::FuseSetAttr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, i
  */
 void FuseRamFs::FuseOpenDir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *inode = GetInode(ino);
     /* return enoent if this inode has been deleted */
     if (inode == nullptr || inode->HasNoLinks()) {
@@ -559,6 +563,7 @@ void FuseRamFs::FuseOpenDir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_inf
  */
 void FuseRamFs::FuseReleaseDir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *inode = GetInode(ino);
     /* return enoent if this inode has been deleted */
     if (inode == nullptr || inode->HasNoLinks()) {
@@ -592,6 +597,7 @@ void FuseRamFs::FuseReleaseDir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_
 void FuseRamFs::FuseReadDir(fuse_req_t req, fuse_ino_t ino, size_t size,
                              off_t off, struct fuse_file_info *fi)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     (void) fi;
    
     Inode *inode = GetInode(ino);
@@ -689,6 +695,7 @@ void FuseRamFs::FuseReadDir(fuse_req_t req, fuse_ino_t ino, size_t size,
 
 void FuseRamFs::FuseOpen(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *inode = GetInode(ino);
     /* return ENOENT if this inode has been deleted */
     if (inode == nullptr || inode->HasNoLinks()) {
@@ -714,6 +721,7 @@ void FuseRamFs::FuseOpen(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *
 
 void FuseRamFs::FuseRelease(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *inode_p = GetInode(ino);
     /* return ENOENT if this inode has been deleted */
     if (inode_p == nullptr || inode_p->HasNoLinks()) {
@@ -737,6 +745,7 @@ void FuseRamFs::FuseRelease(fuse_req_t req, fuse_ino_t ino, struct fuse_file_inf
 
 void FuseRamFs::FuseFsync(fuse_req_t req, fuse_ino_t ino, int datasync, struct fuse_file_info *fi)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     if (GetInode(ino) == nullptr) {
         fuse_reply_err(req, ENOENT);
         return;
@@ -747,6 +756,7 @@ void FuseRamFs::FuseFsync(fuse_req_t req, fuse_ino_t ino, int datasync, struct f
 
 void FuseRamFs::FuseFsyncDir(fuse_req_t req, fuse_ino_t ino, int datasync, struct fuse_file_info *fi)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *inode_p = GetInode(ino);
 
     if (inode_p == nullptr || inode_p->HasNoLinks()) {
@@ -767,6 +777,7 @@ void FuseRamFs::FuseFsyncDir(fuse_req_t req, fuse_ino_t ino, int datasync, struc
 void FuseRamFs::FuseMknod(fuse_req_t req, fuse_ino_t parent, const char *name,
                          mode_t mode, dev_t rdev)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *parentInode = GetInode(parent);
     /* return ENOENT if this inode has been deleted */
     if (parentInode == nullptr || parentInode->HasNoLinks()) {
@@ -888,6 +899,7 @@ long FuseRamFs::do_create_node(Directory *parent, const char *name, mode_t mode,
 
 void FuseRamFs::FuseMkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *parentInode = GetInode(parent);
     
     if (parentInode == nullptr || parentInode->HasNoLinks()) {
@@ -930,6 +942,7 @@ void FuseRamFs::FuseMkdir(fuse_req_t req, fuse_ino_t parent, const char *name, m
 
 void FuseRamFs::FuseUnlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *parentInode = GetInode(parent);
     /* return ENOENT if this inode has been deleted */
     if (parentInode == nullptr || parentInode->HasNoLinks()) {
@@ -972,6 +985,7 @@ void FuseRamFs::FuseUnlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 
 void FuseRamFs::FuseRmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *parentInode = GetInode(parent);
     /* return ENOENT if this inode has been deleted */
     if (parentInode == nullptr || parentInode->HasNoLinks()) {
@@ -1043,6 +1057,7 @@ void FuseRamFs::FuseRmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
 
 void FuseRamFs::FuseForget(fuse_req_t req, fuse_ino_t ino, unsigned long nlookup)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *inode_p = GetInode(ino);
     
     if (inode_p == nullptr) {
@@ -1075,6 +1090,7 @@ void FuseRamFs::FuseForget(fuse_req_t req, fuse_ino_t ino, unsigned long nlookup
 
 void FuseRamFs::FuseWrite(fuse_req_t req, fuse_ino_t ino, const char *buf, size_t size, off_t off, struct fuse_file_info *fi)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     // TODO: Fuse seems to have problems writing with a null (buf) buffer.
     if (buf == NULL) {
         fuse_reply_err(req, EINVAL);
@@ -1101,6 +1117,7 @@ void FuseRamFs::FuseFlush(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info 
 
 void FuseRamFs::FuseRead(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off, struct fuse_file_info *fi)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *inode_p = GetInode(ino);
     
     if (inode_p == nullptr || inode_p->HasNoLinks()) {
@@ -1115,6 +1132,7 @@ void FuseRamFs::FuseRead(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 
 void FuseRamFs::FuseRename(fuse_req_t req, fuse_ino_t parent, const char *name, fuse_ino_t newparent, const char *newname)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     // Make sure the parents still exists.
     Inode *parentInode = GetInode(parent);
     Inode *newParentInode = GetInode(newparent);
@@ -1238,6 +1256,7 @@ void FuseRamFs::FuseRename(fuse_req_t req, fuse_ino_t parent, const char *name, 
 
 void FuseRamFs::FuseLink(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent, const char *newname)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     // Make sure the source inode and the parent exists.
     Inode *parent = GetInode(newparent);
     Inode *src = GetInode(ino);
@@ -1284,6 +1303,7 @@ void FuseRamFs::FuseLink(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent, c
 
 void FuseRamFs::FuseSymlink(fuse_req_t req, const char *link, fuse_ino_t parent, const char *name)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *parent_p = GetInode(parent);
     
     if (parent_p == nullptr || parent_p->HasNoLinks()) {
@@ -1330,6 +1350,7 @@ void FuseRamFs::FuseSymlink(fuse_req_t req, const char *link, fuse_ino_t parent,
 
 void FuseRamFs::FuseReadLink(fuse_req_t req, fuse_ino_t ino)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *inode_p = GetInode(ino);
     
     if (inode_p == nullptr || inode_p->HasNoLinks()) {
@@ -1355,6 +1376,7 @@ void FuseRamFs::FuseReadLink(fuse_req_t req, fuse_ino_t ino)
 
 void FuseRamFs::FuseStatfs(fuse_req_t req, fuse_ino_t ino)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     struct statvfs info;
     FuseRamFs::FsStat(&info);
     fuse_reply_statfs(req, &info);
@@ -1366,6 +1388,7 @@ void FuseRamFs::FuseSetXAttr(fuse_req_t req, fuse_ino_t ino, const char *name, c
 void FuseRamFs::FuseSetXAttr(fuse_req_t req, fuse_ino_t ino, const char *name, const char *value, size_t size, int flags)
 #endif
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *inode_p = GetInode(ino);
     
     if (inode_p == nullptr || inode_p->HasNoLinks()) {
@@ -1386,6 +1409,7 @@ void FuseRamFs::FuseGetXAttr(fuse_req_t req, fuse_ino_t ino, const char *name, s
 void FuseRamFs::FuseGetXAttr(fuse_req_t req, fuse_ino_t ino, const char *name, size_t size)
 #endif
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *inode_p = GetInode(ino);
     
     if (inode_p == nullptr || inode_p->HasNoLinks()) {
@@ -1402,6 +1426,7 @@ void FuseRamFs::FuseGetXAttr(fuse_req_t req, fuse_ino_t ino, const char *name, s
 
 void FuseRamFs::FuseListXAttr(fuse_req_t req, fuse_ino_t ino, size_t size)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *inode_p = GetInode(ino);
 
     if (inode_p == nullptr || inode_p->HasNoLinks()) {
@@ -1414,6 +1439,7 @@ void FuseRamFs::FuseListXAttr(fuse_req_t req, fuse_ino_t ino, size_t size)
 
 void FuseRamFs::FuseRemoveXAttr(fuse_req_t req, fuse_ino_t ino, const char *name)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *inode_p = GetInode(ino);
     
     if (inode_p == nullptr || inode_p->HasNoLinks()) {
@@ -1425,6 +1451,7 @@ void FuseRamFs::FuseRemoveXAttr(fuse_req_t req, fuse_ino_t ino, const char *name
 
 void FuseRamFs::FuseAccess(fuse_req_t req, fuse_ino_t ino, int mask)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *inode_p = GetInode(ino);
     
     if (inode_p == nullptr || inode_p->HasNoLinks()) {
@@ -1438,6 +1465,7 @@ void FuseRamFs::FuseAccess(fuse_req_t req, fuse_ino_t ino, int mask)
 
 void FuseRamFs::FuseCreate(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode, struct fuse_file_info *fi)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *parent_p = GetInode(parent);
     if (parent_p == nullptr || parent_p->HasNoLinks()) {
         fuse_reply_err(req, ENOENT);
