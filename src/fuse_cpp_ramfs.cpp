@@ -121,8 +121,8 @@ int FuseRamFs::checkpoint(uint64_t key)
 
     for (unsigned i = 0; i < Inodes.size(); i++)
     {
-        if (isExistInDeleted((fuse_ino_t)i, DeletedInodes)){
-            copied_files.push_back((Inode*) nullptr);
+        if (Inodes[i] == nullptr){
+            copied_files.push_back(nullptr);
             continue;
         }
 
@@ -199,8 +199,7 @@ err:
 void FuseRamFs::invalidate_kernel_states()
 {
     for (std::vector<Inode *>::iterator it = Inodes.begin(); it != Inodes.end(); ++it){
-        fuse_ino_t i = (fuse_ino_t) std::distance(Inodes.begin(), it);
-        if (isExistInDeleted(i, DeletedInodes)){
+        if ((*it) == nullptr){
             continue;
         }
         /* Invalidate possible kernel inode cache */
@@ -266,8 +265,8 @@ int FuseRamFs::restore(uint64_t key)
 
     for (unsigned i = 0; i < stored_files.size(); i++)
     {
-        if (isExistInDeleted((fuse_ino_t)i, DeletedInodes)){
-            newfiles.push_back((Inode*) nullptr);
+        if (stored_files[i] == nullptr){
+            newfiles.push_back(nullptr);
             continue;
         }
         inode_mode = stored_files[i]->GetMode();
