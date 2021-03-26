@@ -56,8 +56,9 @@ public:
     const std::map<std::string, fuse_ino_t> &Children() { return m_children; }
 
     std::shared_mutex& DirLock() { return childrenRwSem; }
-
+    #ifdef DUMP_TESTING
     friend void dump_Directory(Directory* dir);
+    #endif
 };
 
 #endif /* directory_hpp */

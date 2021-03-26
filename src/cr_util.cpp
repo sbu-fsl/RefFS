@@ -2,15 +2,16 @@
 #include <vector>
 #include <cstdint>
 #include <cerrno>
-#include "cr.hpp"
+#include "cr_util.hpp"
 
-#define PRINT_CLASS(x) std::cout << "Class Name: " << typeid(x).name() << std::endl
+#ifdef DUMP_TESTING
 #define PRINT_VAL(x) std::cout << #x" : " << x << std::endl
 
 bool isExistInDeleted(fuse_ino_t curr_ino, std::queue<fuse_ino_t> DeletedInodes);
 void print_ino_queue(std::queue<fuse_ino_t> DeletedInodes);
+#endif
 
-std::unordered_map<uint64_t, std::tuple<std::vector <Inode *>, std::queue<fuse_ino_t>, struct statvfs> > state_pool;
+std::unordered_map<uint64_t, verifs2_state > state_pool;
 
 int insert_state(uint64_t key, 
                   std::tuple<std::vector <Inode *>, std::queue<fuse_ino_t>, 
@@ -25,14 +26,13 @@ int insert_state(uint64_t key,
   return 0;
 }
 
-std::tuple<std::vector <Inode *>, std::queue<fuse_ino_t>, struct statvfs> 
-find_state(uint64_t key)
+verifs2_state find_state(uint64_t key)
 {
   auto it = state_pool.find(key);
   if (it == state_pool.end()) {
     std::queue<fuse_ino_t> empty_queue;
     struct statvfs empty_statvfs = {};
-    return std::tuple<std::vector <Inode *>, std::queue<fuse_ino_t>, struct statvfs>{std::vector <Inode *>(), empty_queue, empty_statvfs};
+    return verifs2_state{std::vector <Inode *>(), empty_queue, empty_statvfs};
   } else {
     return it->second;
   }
@@ -48,6 +48,7 @@ int remove_state(uint64_t key)
   return 0;
 }
 
+#ifdef DUMP_TESTING
 /* Dump functionalites to verify Checkpoint/Restore APIs */
 
 void dump_File(File* file)
@@ -191,3 +192,4 @@ int dump_state_pool()
   return ret;
 }
 
+#endif

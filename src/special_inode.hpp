@@ -29,7 +29,9 @@ public:
     int ReadAndReply(fuse_req_t req, size_t size, off_t off);
     
     enum SpecialInodeTypes Type();
+    #ifdef DUMP_TESTING
     friend void dump_SpecialInode(SpecialInode* sinode);
+    #endif
 };
 
 #endif /* special_inode_hpp */

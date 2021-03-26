@@ -11,3 +11,10 @@ sudo umount -l /mnt/test-verifs2
 sudo rm -rf /mnt/test-verifs2/*
 sudo umount -l /mnt/test-verifs1
 sudo rm -rf /mnt/test-verifs1/*
+sudo rm -r /mnt/test-verifs2
+sudo rm -r /mnt/test-verifs1
+sudo mkdir /mnt/test-verifs2
+sudo mkdir /mnt/test-verifs1
+sudo chown yifei:yifei /mnt/test-verifs2
+sudo chown yifei:yifei /mnt/test-verifs1
+

@@ -7,7 +7,8 @@
 
 #include "common.h"
 #include "inode.hpp"
-#include "cr.hpp"
+#include "cr_util.hpp"
+#include "cr.h"
 
 class Directory;
 

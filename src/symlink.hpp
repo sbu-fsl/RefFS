@@ -26,7 +26,9 @@ public:
     
     
     const std::string &Link() { return m_link; }
+    #ifdef DUMP_TESTING
     friend void dump_SymLink(SymLink* m_link);
+    #endif
 };
 
 #endif /* symlink_hpp */

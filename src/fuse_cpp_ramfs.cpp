@@ -233,7 +233,7 @@ int FuseRamFs::restore(uint64_t key)
         return ret;
     }
     #endif
-    std::tuple<std::vector <Inode *>, std::queue<fuse_ino_t>, struct statvfs> stored_states = find_state(key);
+    verifs2_state stored_states = find_state(key);
 
     std::vector <Inode *> stored_files = std::get<0>(stored_states);
     std::queue<fuse_ino_t> stored_DeletedInodes = std::get<1>(stored_states);

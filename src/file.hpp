@@ -30,7 +30,9 @@ public:
     int FileTruncate(size_t newSize);
 
     friend class FuseRamFs;
+    #ifdef DUMP_TESTING
     friend void dump_File(File* file);
+    #endif
 //    size_t Size();
 };
 
