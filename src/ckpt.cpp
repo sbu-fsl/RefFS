@@ -64,7 +64,7 @@ int main(int argc, char **argv)
     }
     */
 
-    ret = ioctl(dirfd, VERIFS2_CHECKPOINT, (void *)key);
+    ret = ioctl(dirfd, VERIFS_CHECKPOINT, (void *)key);
     if (ret != 0) {
         printf("Result: ret = %d, errno = %d\n", ret, errno);
     }

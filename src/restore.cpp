@@ -84,7 +84,7 @@ int main(int argc, char **argv)
     }
     */    
 
-    ret = ioctl(dirfd, VERIFS2_RESTORE, (void *)key);
+    ret = ioctl(dirfd, VERIFS_RESTORE, (void *)key);
     if (ret != 0) {
         printf("Result: ret = %d, errno = %d\n", ret, errno);
     }

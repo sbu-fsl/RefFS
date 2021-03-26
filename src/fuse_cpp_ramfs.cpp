@@ -347,11 +347,11 @@ void FuseRamFs::FuseIoctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
 {
     int ret;
     switch (cmd){
-        case VERIFS2_CHECKPOINT:
+        case VERIFS_CHECKPOINT:
             ret = checkpoint((uint64_t)arg);
             break;
         
-        case VERIFS2_RESTORE:
+        case VERIFS_RESTORE:
             ret = restore((uint64_t)arg);
             break;
         
