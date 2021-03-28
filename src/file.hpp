@@ -14,7 +14,7 @@ public:
     m_buf(NULL) {}
 
     File(const File &f) : Inode(f){
-        size_t bufsize = f.m_fuseEntryParam.attr.st_size; 
+        size_t bufsize = f.m_fuseEntryParam.attr.st_blocks * f.BufBlockSize; 
         m_buf = malloc(bufsize);
         if (!m_buf){
             std::cerr << "malloc failed for File copy constructor\n";

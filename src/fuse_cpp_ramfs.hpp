@@ -42,6 +42,7 @@ private:
     static int checkpoint(uint64_t key);
     static void invalidate_kernel_states();
     static int restore(uint64_t key);
+    static void check_restored_inode_size();
 
     /* Atomic inode table operations */
     static void DeleteInode(fuse_ino_t ino) {

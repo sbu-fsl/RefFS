@@ -69,6 +69,6 @@ int main(int argc, char **argv)
         printf("Result: ret = %d, errno = %d\n", ret, errno);
     }
 
-    std::cout << "CHECKPOINT: Running dump_state_pool() to dump current states\n";
+    //std::cout << "CHECKPOINT: Running dump_state_pool() to dump current states\n";
     return (ret == 0) ? 0 : 1;
 }

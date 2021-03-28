@@ -107,6 +107,7 @@ FuseRamFs::~FuseRamFs()
 
 int FuseRamFs::checkpoint(uint64_t key)
 {
+    //std::cout << "Start Checkpoint.\n";
     // Lock
     std::unique_lock<std::shared_mutex> lk(crMutex);
     int ret = 0;
@@ -221,8 +222,16 @@ void FuseRamFs::invalidate_kernel_states()
 }
 
 
+void FuseRamFs::check_restored_inode_size(){
+    for (std::vector<Inode *>::iterator it = Inodes.begin() ; it != Inodes.end(); ++it){
+        std::cout << "Order: " << std::distance(Inodes.begin(), it) << " - Inode Size: " 
+            << (*it)->m_fuseEntryParam.attr.st_size << std::endl;
+    }
+}
+
 int FuseRamFs::restore(uint64_t key)
 {
+    //std::cout << "Start Restore.\n";
     // Lock
     std::unique_lock<std::shared_mutex> lk(crMutex);
     int ret = 0;
@@ -319,6 +328,8 @@ int FuseRamFs::restore(uint64_t key)
     // clear old Inodes
     std::vector<Inode *>().swap(Inodes);
     Inodes = newfiles;
+    // Check inode size
+    //check_restored_inode_size();
     // clear stored_files
     std::vector<Inode *>().swap(stored_files);
     ret = remove_state(key);
