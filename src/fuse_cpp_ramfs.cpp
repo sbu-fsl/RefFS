@@ -378,6 +378,11 @@ void FuseRamFs::FuseIoctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
     }
 }
 
+static inline mode_t get_umask() {
+    mode_t mask = umask(0);
+    umask(mask);
+    return mask;
+}
 
 /**
  Initializes the filesystem. Creates the root directory. The UID and GID are those
@@ -411,7 +416,8 @@ void FuseRamFs::FuseInit(void *userdata, struct fuse_conn_info *conn)
     
     // I think that that the root directory should have a hardlink count of 3.
     // This is what I believe I've surmised from reading around.
-    fuse_ino_t rootno = RegisterInode(root, S_IFDIR | 0777, 3, gid, uid);
+    mode_t rootmode = 0777 & (~get_umask());
+    fuse_ino_t rootno = RegisterInode(root, S_IFDIR | rootmode, 3, gid, uid);
     root->AddChild(string("."), rootno);
     root->AddChild(string(".."), rootno);
 
