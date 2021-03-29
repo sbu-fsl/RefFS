@@ -519,8 +519,7 @@ void FuseRamFs::FuseSetAttr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, i
         return;
     }
 
-    /* Non-null fi means the setattr() is called by ftruncate(). */
-    if (fi && (to_set & FUSE_SET_ATTR_SIZE)) {
+    if (to_set & FUSE_SET_ATTR_SIZE) {
         File *file = dynamic_cast<File *>(inode);
         /* Cannot ftruncate a non-regular file */
         if (file == nullptr) {
