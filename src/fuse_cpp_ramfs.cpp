@@ -399,10 +399,10 @@ void FuseRamFs::FuseInit(void *userdata, struct fuse_conn_info *conn)
     
     Directory *root = new Directory();
     
-    // I think that that the root directory should have a hardlink count of 3.
+    // I think that that the root directory should have a hardlink count of 2.
     // This is what I believe I've surmised from reading around.
     mode_t rootmode = 0777 & (~get_umask());
-    fuse_ino_t rootno = RegisterInode(root, S_IFDIR | rootmode, 3, gid, uid);
+    fuse_ino_t rootno = RegisterInode(root, S_IFDIR | rootmode, 2, gid, uid);
     root->AddChild(string("."), rootno);
     root->AddChild(string(".."), rootno);
 
