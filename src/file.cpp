@@ -60,6 +60,7 @@ int File::FileTruncate(size_t newSize) {
 int File::WriteAndReply(fuse_req_t req, const char *buf, size_t size, off_t off) {
     // Allocate more memory if we don't have space.
     size_t newSize = off + size;
+    size_t oldSize = Size();
     size_t originalCapacity = Inode::BufBlockSize * File::UsedBlocks();
     size_t newBlocks = newSize/Inode::BufBlockSize + (newSize % Inode::BufBlockSize != 0);
 
@@ -78,12 +79,18 @@ int File::WriteAndReply(fuse_req_t req, const char *buf, size_t size, off_t off)
         // Update our buffer size
         m_buf = newBuf;
     }
+
+    /* If write() operation expands the file, we must zero out the "hole"
+     * that the write may create (i.e. the range of [oldsize, offset)).
+     * Otherwise, the "hole" may contain garbage data */
+    if ((size_t)off > oldSize)
+        memset((char *)m_buf + oldSize, 0, off - oldSize);
     
     // Write to the buffer. TODO: Check if SRC and DST overlap.
     // We assume that there can be no buffer overflow since realloc has already
     // been called with the new size and offset. If realloc failed, we wouldn't
     // be here.
-    memcpy((char *) m_buf + off, buf, size);
+    memmove((char *) m_buf + off, buf, size);
 
     /* Update size and block usage info */
     if (newSize > originalCapacity) {
@@ -91,7 +98,7 @@ int File::WriteAndReply(fuse_req_t req, const char *buf, size_t size, off_t off)
     }
 
     std::unique_lock<std::shared_mutex> lk(entryRwSem);
-    if (newSize > originalCapacity) {
+    if (newSize > oldSize) {
         m_fuseEntryParam.attr.st_blocks = newBlocks;
         m_fuseEntryParam.attr.st_size = newSize;
     }

@@ -26,7 +26,14 @@ public:
     m_markedForDeletion(false),
     m_nlookup(0)
     {}
-    
+
+    Inode(const Inode &src) {
+      m_markedForDeletion = src.m_markedForDeletion;
+      m_nlookup.store(src.m_nlookup.load());
+      m_fuseEntryParam = src.m_fuseEntryParam;
+      m_xattr = src.m_xattr;
+    }
+
     virtual ~Inode() = 0;
     
     virtual int WriteAndReply(fuse_req_t req, const char *buf, size_t size, off_t off) = 0;
@@ -78,6 +85,12 @@ public:
     fuse_ino_t GetIno() { return m_fuseEntryParam.attr.st_ino; }
     
     bool Forgotten() { return m_nlookup == 0; }
+
+    friend class FuseRamFs;
+    friend class File;
+    friend class Directory;
+    friend class SpecialInode;
+    friend class SymLink;
 };
 
 #endif /* inode_hpp */

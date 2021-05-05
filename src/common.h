@@ -35,4 +35,6 @@
 
 #include "util.hpp"
 
+extern struct fuse_chan *ch;
+
 #endif
