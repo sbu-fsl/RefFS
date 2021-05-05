@@ -22,6 +22,7 @@ using namespace std;
  */
 vector<Inode *> FuseRamFs::Inodes = vector<Inode *>();
 std::shared_mutex FuseRamFs::inodesRwSem;
+std::shared_mutex FuseRamFs::crMutex;
 
 /**
  The Inodes which have been deleted.
@@ -76,6 +77,7 @@ FuseRamFs::FuseRamFs(fsblkcnt_t blocks, fsfilcnt_t inodes)
     FuseOps.access      = FuseRamFs::FuseAccess;
     FuseOps.create      = FuseRamFs::FuseCreate;
     FuseOps.getlk       = FuseRamFs::FuseGetLock;
+    FuseOps.ioctl       = FuseRamFs::FuseIoctl;
     
     if (blocks <= 0) {
         blocks = kTotalBlocks;
@@ -103,6 +105,269 @@ FuseRamFs::~FuseRamFs()
 
 }
 
+static void free_inodes(std::vector<Inode *> &table)
+{
+    for (size_t i = 0; i < table.size(); ++i) {
+        if (table[i]) {
+            delete table[i];
+        }
+    }
+    table.clear();
+}
+
+int FuseRamFs::checkpoint(uint64_t key)
+{
+    //std::cout << "Start Checkpoint.\n";
+    // Lock
+    std::unique_lock<std::shared_mutex> lk(crMutex);
+    int ret = 0;
+    std::vector <Inode *> copied_files = std::vector<Inode *>();
+
+    mode_t inode_mode;
+
+    File *file_inode_old;
+    Directory *dir_inode_old;
+    SpecialInode *special_inode_old;
+    SymLink *symlink_inode_old;
+
+    for (unsigned i = 0; i < Inodes.size(); i++)
+    {
+        if (Inodes[i] == nullptr){
+            copied_files.push_back(nullptr);
+            continue;
+        }
+
+        inode_mode = Inodes[i]->GetMode();
+        if (S_ISREG(inode_mode)){
+            file_inode_old = dynamic_cast<File *>(Inodes[i]);
+            if (file_inode_old == NULL){
+                ret = -EBADF;
+                goto err;
+            }
+
+            File *file_inode_copy = new File(*file_inode_old);
+            copied_files.push_back((Inode*) file_inode_copy);
+
+        } else if (S_ISDIR(inode_mode)) {
+            dir_inode_old = dynamic_cast<Directory *>(Inodes[i]);
+            if (dir_inode_old == NULL){
+                ret = -EBADF;
+                goto err;
+            }
+
+            Directory *dir_copy = new Directory(*dir_inode_old);
+            copied_files.push_back((Inode*) dir_copy);
+
+        } else if (S_ISLNK(inode_mode)) {
+            symlink_inode_old = dynamic_cast<SymLink *>(Inodes[i]);
+            if (symlink_inode_old == NULL){
+                ret = -EBADF;
+                goto err;
+            }
+
+            SymLink *symlink_inode_copy = new SymLink(*symlink_inode_old);
+            copied_files.push_back((Inode*) symlink_inode_copy);
+
+        } else {
+            special_inode_old = dynamic_cast<SpecialInode *>(Inodes[i]);
+            if (special_inode_old == NULL){
+                ret = -EBADF;
+                goto err;
+            }
+
+            SpecialInode *special_inode_copy = new SpecialInode(*special_inode_old);
+            copied_files.push_back((Inode*) special_inode_copy);
+        }    
+    }
+    // insert state
+    ret = insert_state(key, std::make_tuple(copied_files, DeletedInodes, m_stbuf));
+    if (ret != 0){
+        goto err;
+    }
+#ifdef DUMP_TESTING
+    ret = dump_inodes_verifs2(Inodes, DeletedInodes, "During/After the checkpoint():");
+    if (ret != 0){
+        goto err;
+    }
+#endif
+    return ret;
+err:
+    // clear copied_files vector
+    std::cerr << "Checkpointing went to error.\n";
+    free_inodes(copied_files);
+    return ret;
+}
+
+void FuseRamFs::invalidate_kernel_states()
+{
+    for (std::vector<Inode *>::iterator it = Inodes.begin(); it != Inodes.end(); ++it){
+        if ((*it) == nullptr){
+            continue;
+        }
+        /* Invalidate possible kernel inode cache */
+        // if m_markedForDeletion is false (the inode exists and is not marked as deleted)
+        if (!(*it)->m_markedForDeletion){
+            fuse_lowlevel_notify_inval_inode(ch, (*it)->GetIno(), 0, 0);
+        }
+        /* Invalidate potential d-cache */
+        if(S_ISDIR((*it)->GetMode())){
+            Directory *parent_dir = dynamic_cast<Directory *>(*it);
+            /* If parent_dir has child dir*/
+            for (auto it_child = parent_dir->m_children.begin(); it_child != parent_dir->m_children.end(); ++it_child){
+                if (it_child->second > 0 && it_child->first != "." && it_child->first != ".."){
+                    fuse_lowlevel_notify_inval_entry(ch, (*it)->GetIno(), (it_child->first).c_str(), (it_child->first).size());
+                }
+            }
+        }
+    }
+}
+
+
+void FuseRamFs::check_restored_inode_size(){
+    for (std::vector<Inode *>::iterator it = Inodes.begin() ; it != Inodes.end(); ++it){
+        std::cout << "Order: " << std::distance(Inodes.begin(), it) << " - Inode Size: " 
+            << (*it)->m_fuseEntryParam.attr.st_size << std::endl;
+    }
+}
+
+int FuseRamFs::restore(uint64_t key)
+{
+    //std::cout << "Start Restore.\n";
+    // Lock
+    std::unique_lock<std::shared_mutex> lk(crMutex);
+    int ret = 0;
+#ifdef DUMP_TESTING
+    ret = dump_inodes_verifs2(Inodes, DeletedInodes, "Before the restore():");
+
+    if (ret != 0){
+        return ret;
+    }
+#endif
+    verifs2_state stored_states = find_state(key);
+
+    std::vector <Inode *> stored_files = std::get<0>(stored_states);
+    std::queue<fuse_ino_t> stored_DeletedInodes = std::get<1>(stored_states);
+    struct statvfs stored_m_stbuf = std::get<2>(stored_states);
+
+    if (stored_files.empty() && stored_DeletedInodes.empty()){
+        ret = -ENOENT;
+        std::cerr << "Not found state in state pool with key " << key << std::endl;
+        return ret;
+    }
+
+    invalidate_kernel_states();
+
+    // tmp_DeletedInodes stores the current DeletedInodes in case restoration failed
+    std::queue<fuse_ino_t> tmp_DeletedInodes = DeletedInodes;
+    // Restore DeletedInodes First
+    DeletedInodes = stored_DeletedInodes;
+    // Then restore m_stbuf
+    struct statvfs tmp_m_stbuf = m_stbuf;
+    m_stbuf = stored_m_stbuf;
+
+    std::vector <Inode *> newfiles;
+    mode_t inode_mode;
+
+    File *file_inode_stored;
+    Directory *dir_inode_stored;
+    SpecialInode *special_inode_stored;
+    SymLink *symlink_inode_stored;
+
+    for (unsigned i = 0; i < stored_files.size(); i++)
+    {
+        if (stored_files[i] == nullptr){
+            newfiles.push_back(nullptr);
+            continue;
+        }
+        inode_mode = stored_files[i]->GetMode();
+        if (S_ISREG(inode_mode)){
+            file_inode_stored = dynamic_cast<File *>(stored_files[i]);
+            if (file_inode_stored == NULL){
+                ret = -EBADF;
+                goto err;
+            }
+            File *file_new = new File(* file_inode_stored);
+            newfiles.push_back((Inode*) file_new);
+        } else if (S_ISDIR(inode_mode)) {
+            dir_inode_stored = dynamic_cast<Directory *>(stored_files[i]);
+            if (dir_inode_stored == NULL){
+                ret = -EBADF;
+                goto err;
+            }
+            Directory *dir_new = new Directory(*dir_inode_stored);
+            newfiles.push_back((Inode*) dir_new);            
+        } else if (S_ISLNK(inode_mode)){
+            symlink_inode_stored = dynamic_cast<SymLink *>(stored_files[i]);
+            if (symlink_inode_stored == NULL){
+                ret = -EBADF;
+                goto err;
+            }
+            SymLink *symlink_new = new SymLink(*symlink_inode_stored);
+            newfiles.push_back((Inode*) symlink_new);
+        } else {
+            special_inode_stored = dynamic_cast<SpecialInode *>(stored_files[i]);
+            if (special_inode_stored == NULL){
+                ret = -EBADF;
+                goto err;
+            }
+            SpecialInode *special_inode_new = new SpecialInode(*special_inode_stored);
+            newfiles.push_back((Inode*) special_inode_new);
+        }
+    }
+    // clear old Inodes
+    free_inodes(Inodes);
+    Inodes.swap(newfiles);
+    free_inodes(stored_files);
+    std::vector<Inode *>().swap(stored_files);
+    ret = remove_state(key);
+#ifdef DUMP_TESTING
+    ret = dump_inodes_verifs2(Inodes, DeletedInodes, "After the restore():");
+
+    if (ret != 0){
+        goto err;
+    }
+#endif
+    return 0;
+err:
+    std::cerr << "Restoration went to error.\n";
+    free_inodes(newfiles);
+    std::vector<Inode *>().swap(newfiles);
+    DeletedInodes = tmp_DeletedInodes;
+    m_stbuf = tmp_m_stbuf;
+    return ret;
+}
+
+void FuseRamFs::FuseIoctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
+                        struct fuse_file_info *fi, unsigned flags,
+                        const void *in_buf, size_t in_bufsz, size_t out_bufsz)
+{
+    int ret;
+    switch (cmd){
+        case VERIFS_CHECKPOINT:
+            ret = checkpoint((uint64_t)arg);
+            break;
+        
+        case VERIFS_RESTORE:
+            ret = restore((uint64_t)arg);
+            break;
+        
+        default:
+            std::cerr << "Function Not implemented in FuseIoctl.\n";
+            ret = ENOSYS;
+            break;
+    }
+    if (ret == 0) {
+        fuse_reply_ioctl(req, 0, NULL, 0);
+    } else {
+        fuse_reply_err(req, -ret);
+    }
+}
+
+static inline mode_t get_umask() {
+    mode_t mask = umask(0);
+    umask(mask);
+    return mask;
+}
 
 /**
  Initializes the filesystem. Creates the root directory. The UID and GID are those
@@ -134,11 +399,15 @@ void FuseRamFs::FuseInit(void *userdata, struct fuse_conn_info *conn)
     
     Directory *root = new Directory();
     
-    // I think that that the root directory should have a hardlink count of 3.
+    // I think that that the root directory should have a hardlink count of 2.
     // This is what I believe I've surmised from reading around.
-    fuse_ino_t rootno = RegisterInode(root, S_IFDIR | 0777, 3, gid, uid);
+    mode_t rootmode = 0777 & (~get_umask());
+    fuse_ino_t rootno = RegisterInode(root, S_IFDIR | rootmode, 2, gid, uid);
     root->AddChild(string("."), rootno);
     root->AddChild(string(".."), rootno);
+
+    /* Enable ioctl on directory */
+    conn->want |= FUSE_CAP_IOCTL_DIR;
 }
 
 
@@ -165,6 +434,7 @@ void FuseRamFs::FuseDestroy(void *userdata)
  */
 void FuseRamFs::FuseLookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *parentInode = GetInode(parent);
     if (parentInode == nullptr || parentInode->HasNoLinks()) {
         fuse_reply_err(req, ENOENT);
@@ -203,6 +473,7 @@ void FuseRamFs::FuseLookup(fuse_req_t req, fuse_ino_t parent, const char *name)
  */
 void FuseRamFs::FuseGetAttr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *inode = GetInode(ino);
     /* return enoent if this inode has been deleted */
     if (inode == nullptr || inode->HasNoLinks()) {
@@ -225,6 +496,7 @@ void FuseRamFs::FuseGetAttr(fuse_req_t req, fuse_ino_t ino, struct fuse_file_inf
  */
 void FuseRamFs::FuseSetAttr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, int to_set, struct fuse_file_info *fi)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *inode = GetInode(ino);
     /* return enoent if this inode has been deleted */
     if (inode == nullptr || inode->HasNoLinks()) {
@@ -232,8 +504,7 @@ void FuseRamFs::FuseSetAttr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, i
         return;
     }
 
-    /* Non-null fi means the setattr() is called by ftruncate(). */
-    if (fi && (to_set & FUSE_SET_ATTR_SIZE)) {
+    if (to_set & FUSE_SET_ATTR_SIZE) {
         File *file = dynamic_cast<File *>(inode);
         /* Cannot ftruncate a non-regular file */
         if (file == nullptr) {
@@ -266,6 +537,7 @@ void FuseRamFs::FuseSetAttr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, i
  */
 void FuseRamFs::FuseOpenDir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *inode = GetInode(ino);
     /* return enoent if this inode has been deleted */
     if (inode == nullptr || inode->HasNoLinks()) {
@@ -296,6 +568,7 @@ void FuseRamFs::FuseOpenDir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_inf
  */
 void FuseRamFs::FuseReleaseDir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *inode = GetInode(ino);
     /* return enoent if this inode has been deleted */
     if (inode == nullptr || inode->HasNoLinks()) {
@@ -329,6 +602,7 @@ void FuseRamFs::FuseReleaseDir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_
 void FuseRamFs::FuseReadDir(fuse_req_t req, fuse_ino_t ino, size_t size,
                              off_t off, struct fuse_file_info *fi)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     (void) fi;
    
     Inode *inode = GetInode(ino);
@@ -426,6 +700,7 @@ void FuseRamFs::FuseReadDir(fuse_req_t req, fuse_ino_t ino, size_t size,
 
 void FuseRamFs::FuseOpen(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *inode = GetInode(ino);
     /* return ENOENT if this inode has been deleted */
     if (inode == nullptr || inode->HasNoLinks()) {
@@ -451,6 +726,7 @@ void FuseRamFs::FuseOpen(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *
 
 void FuseRamFs::FuseRelease(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *fi)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *inode_p = GetInode(ino);
     /* return ENOENT if this inode has been deleted */
     if (inode_p == nullptr || inode_p->HasNoLinks()) {
@@ -474,6 +750,7 @@ void FuseRamFs::FuseRelease(fuse_req_t req, fuse_ino_t ino, struct fuse_file_inf
 
 void FuseRamFs::FuseFsync(fuse_req_t req, fuse_ino_t ino, int datasync, struct fuse_file_info *fi)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     if (GetInode(ino) == nullptr) {
         fuse_reply_err(req, ENOENT);
         return;
@@ -484,6 +761,7 @@ void FuseRamFs::FuseFsync(fuse_req_t req, fuse_ino_t ino, int datasync, struct f
 
 void FuseRamFs::FuseFsyncDir(fuse_req_t req, fuse_ino_t ino, int datasync, struct fuse_file_info *fi)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *inode_p = GetInode(ino);
 
     if (inode_p == nullptr || inode_p->HasNoLinks()) {
@@ -504,6 +782,7 @@ void FuseRamFs::FuseFsyncDir(fuse_req_t req, fuse_ino_t ino, int datasync, struc
 void FuseRamFs::FuseMknod(fuse_req_t req, fuse_ino_t parent, const char *name,
                          mode_t mode, dev_t rdev)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *parentInode = GetInode(parent);
     /* return ENOENT if this inode has been deleted */
     if (parentInode == nullptr || parentInode->HasNoLinks()) {
@@ -625,6 +904,7 @@ long FuseRamFs::do_create_node(Directory *parent, const char *name, mode_t mode,
 
 void FuseRamFs::FuseMkdir(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *parentInode = GetInode(parent);
     
     if (parentInode == nullptr || parentInode->HasNoLinks()) {
@@ -667,6 +947,7 @@ void FuseRamFs::FuseMkdir(fuse_req_t req, fuse_ino_t parent, const char *name, m
 
 void FuseRamFs::FuseUnlink(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *parentInode = GetInode(parent);
     /* return ENOENT if this inode has been deleted */
     if (parentInode == nullptr || parentInode->HasNoLinks()) {
@@ -702,13 +983,14 @@ void FuseRamFs::FuseUnlink(fuse_req_t req, fuse_ino_t parent, const char *name)
     
     // Update the number of hardlinks in the target
     inode_p->RemoveHardLink();
-    
+
     // Reply with no error. TODO: Where is ESUCCESS?
     fuse_reply_err(req, 0);
 }
 
 void FuseRamFs::FuseRmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *parentInode = GetInode(parent);
     /* return ENOENT if this inode has been deleted */
     if (parentInode == nullptr || parentInode->HasNoLinks()) {
@@ -780,6 +1062,7 @@ void FuseRamFs::FuseRmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
 
 void FuseRamFs::FuseForget(fuse_req_t req, fuse_ino_t ino, unsigned long nlookup)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *inode_p = GetInode(ino);
     
     if (inode_p == nullptr) {
@@ -812,6 +1095,7 @@ void FuseRamFs::FuseForget(fuse_req_t req, fuse_ino_t ino, unsigned long nlookup
 
 void FuseRamFs::FuseWrite(fuse_req_t req, fuse_ino_t ino, const char *buf, size_t size, off_t off, struct fuse_file_info *fi)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     // TODO: Fuse seems to have problems writing with a null (buf) buffer.
     if (buf == NULL) {
         fuse_reply_err(req, EINVAL);
@@ -838,6 +1122,7 @@ void FuseRamFs::FuseFlush(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info 
 
 void FuseRamFs::FuseRead(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off, struct fuse_file_info *fi)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *inode_p = GetInode(ino);
     
     if (inode_p == nullptr || inode_p->HasNoLinks()) {
@@ -852,6 +1137,7 @@ void FuseRamFs::FuseRead(fuse_req_t req, fuse_ino_t ino, size_t size, off_t off,
 
 void FuseRamFs::FuseRename(fuse_req_t req, fuse_ino_t parent, const char *name, fuse_ino_t newparent, const char *newname)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     // Make sure the parents still exists.
     Inode *parentInode = GetInode(parent);
     Inode *newParentInode = GetInode(newparent);
@@ -975,6 +1261,7 @@ void FuseRamFs::FuseRename(fuse_req_t req, fuse_ino_t parent, const char *name, 
 
 void FuseRamFs::FuseLink(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent, const char *newname)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     // Make sure the source inode and the parent exists.
     Inode *parent = GetInode(newparent);
     Inode *src = GetInode(ino);
@@ -1021,6 +1308,7 @@ void FuseRamFs::FuseLink(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent, c
 
 void FuseRamFs::FuseSymlink(fuse_req_t req, const char *link, fuse_ino_t parent, const char *name)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *parent_p = GetInode(parent);
     
     if (parent_p == nullptr || parent_p->HasNoLinks()) {
@@ -1036,7 +1324,7 @@ void FuseRamFs::FuseSymlink(fuse_req_t req, const char *link, fuse_ino_t parent,
     }
 
     /* Check free space and free inodes */
-    if (FuseRamFs::CheckHasSpaceFor(nullptr, strnlen(name, PATH_MAX))) {
+    if (!FuseRamFs::CheckHasSpaceFor(nullptr, strnlen(name, PATH_MAX))) {
         fuse_reply_err(req, ENOSPC);
     }
     if (FuseRamFs::GetFreeInodes() <= 0) {
@@ -1067,6 +1355,7 @@ void FuseRamFs::FuseSymlink(fuse_req_t req, const char *link, fuse_ino_t parent,
 
 void FuseRamFs::FuseReadLink(fuse_req_t req, fuse_ino_t ino)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *inode_p = GetInode(ino);
     
     if (inode_p == nullptr || inode_p->HasNoLinks()) {
@@ -1092,6 +1381,7 @@ void FuseRamFs::FuseReadLink(fuse_req_t req, fuse_ino_t ino)
 
 void FuseRamFs::FuseStatfs(fuse_req_t req, fuse_ino_t ino)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     struct statvfs info;
     FuseRamFs::FsStat(&info);
     fuse_reply_statfs(req, &info);
@@ -1103,6 +1393,7 @@ void FuseRamFs::FuseSetXAttr(fuse_req_t req, fuse_ino_t ino, const char *name, c
 void FuseRamFs::FuseSetXAttr(fuse_req_t req, fuse_ino_t ino, const char *name, const char *value, size_t size, int flags)
 #endif
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *inode_p = GetInode(ino);
     
     if (inode_p == nullptr || inode_p->HasNoLinks()) {
@@ -1123,6 +1414,7 @@ void FuseRamFs::FuseGetXAttr(fuse_req_t req, fuse_ino_t ino, const char *name, s
 void FuseRamFs::FuseGetXAttr(fuse_req_t req, fuse_ino_t ino, const char *name, size_t size)
 #endif
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *inode_p = GetInode(ino);
     
     if (inode_p == nullptr || inode_p->HasNoLinks()) {
@@ -1139,6 +1431,7 @@ void FuseRamFs::FuseGetXAttr(fuse_req_t req, fuse_ino_t ino, const char *name, s
 
 void FuseRamFs::FuseListXAttr(fuse_req_t req, fuse_ino_t ino, size_t size)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *inode_p = GetInode(ino);
 
     if (inode_p == nullptr || inode_p->HasNoLinks()) {
@@ -1151,6 +1444,7 @@ void FuseRamFs::FuseListXAttr(fuse_req_t req, fuse_ino_t ino, size_t size)
 
 void FuseRamFs::FuseRemoveXAttr(fuse_req_t req, fuse_ino_t ino, const char *name)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *inode_p = GetInode(ino);
     
     if (inode_p == nullptr || inode_p->HasNoLinks()) {
@@ -1162,6 +1456,7 @@ void FuseRamFs::FuseRemoveXAttr(fuse_req_t req, fuse_ino_t ino, const char *name
 
 void FuseRamFs::FuseAccess(fuse_req_t req, fuse_ino_t ino, int mask)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *inode_p = GetInode(ino);
     
     if (inode_p == nullptr || inode_p->HasNoLinks()) {
@@ -1175,6 +1470,7 @@ void FuseRamFs::FuseAccess(fuse_req_t req, fuse_ino_t ino, int mask)
 
 void FuseRamFs::FuseCreate(fuse_req_t req, fuse_ino_t parent, const char *name, mode_t mode, struct fuse_file_info *fi)
 {
+    std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *parent_p = GetInode(parent);
     if (parent_p == nullptr || parent_p->HasNoLinks()) {
         fuse_reply_err(req, ENOENT);

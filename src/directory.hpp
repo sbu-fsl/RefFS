@@ -28,8 +28,13 @@ public:
 
     static std::unordered_map<off_t, Directory::ReadDirCtx *> readdirStates;
     ReadDirCtx* PrepareReaddir(off_t cookie);
+    friend class FuseRamFs;
 public:
     ~Directory() {}
+    Directory() {};
+    Directory(const Directory &d) : Inode(d) {
+      m_children = d.m_children;
+    }
 
     void Initialize(fuse_ino_t ino, mode_t mode, nlink_t nlink, gid_t gid, uid_t uid);
     fuse_ino_t _ChildInodeNumberWithName(const std::string &name);
@@ -51,6 +56,9 @@ public:
     const std::map<std::string, fuse_ino_t> &Children() { return m_children; }
 
     std::shared_mutex& DirLock() { return childrenRwSem; }
+    #ifdef DUMP_TESTING
+    friend void dump_Directory(Directory* dir);
+    #endif
 };
 
 #endif /* directory_hpp */
