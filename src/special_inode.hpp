@@ -19,12 +19,19 @@ private:
 public:
     SpecialInode(enum SpecialInodeTypes type, dev_t dev = 0);
     ~SpecialInode() {};
+
+    SpecialInode(const SpecialInode &sp) : Inode(sp) {
+      m_type = sp.m_type;
+    }    
     
     int WriteAndReply(fuse_req_t req, const char *buf, size_t size, off_t off);
     
     int ReadAndReply(fuse_req_t req, size_t size, off_t off);
     
     enum SpecialInodeTypes Type();
+    #ifdef DUMP_TESTING
+    friend void dump_SpecialInode(SpecialInode* sinode);
+    #endif
 };
 
 #endif /* special_inode_hpp */

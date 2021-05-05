@@ -11,6 +11,7 @@
 using namespace std;
 std::unordered_map<off_t, Directory::ReadDirCtx *> Directory::readdirStates;
 
+
 void Directory::UpdateSize(ssize_t delta) {
     std::unique_lock<std::shared_mutex> lk(entryRwSem);
 
