@@ -138,3 +138,36 @@ int File::ReadAndReply(fuse_req_t req, size_t size, off_t off) {
     return fuse_reply_buf(req, (const char *) m_buf + off, bytesRead);
 }
 
+size_t File::GetPickledSize() {
+    return Inode::GetPickledSize() + m_fuseEntryParam.attr.st_size;
+}
+
+size_t File::Pickle(void* &buf) {
+    if (buf == nullptr) {
+        buf = malloc(File::GetPickledSize());
+    }
+    if (buf == nullptr) {
+        return 0;
+    }
+    size_t offset = Inode::Pickle(buf);
+    char *ptr = (char *)buf + offset;
+    size_t fsize = m_fuseEntryParam.attr.st_size;
+    memcpy(ptr, m_buf, fsize);
+    return offset + fsize;
+}
+
+size_t File::Load(const void* &buf) {
+    size_t offset = Inode::Load(buf);
+    size_t fsize = m_fuseEntryParam.attr.st_size;
+    size_t nblocks = m_fuseEntryParam.attr.st_blocks;
+    size_t fcap = m_fuseEntryParam.attr.st_blksize * nblocks;
+    
+    m_buf = calloc(fcap, 1);
+    if (m_buf == nullptr) {
+        ClearXAttrs();
+        return 0;
+    }
+    char *ptr = (char *)buf + offset;
+    memcpy(m_buf, ptr, fsize);
+    return offset + fsize;
+}

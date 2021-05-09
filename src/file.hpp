@@ -29,6 +29,10 @@ public:
     int ReadAndReply(fuse_req_t req, size_t size, off_t off);
     int FileTruncate(size_t newSize);
 
+    size_t GetPickledSize();
+    size_t Pickle(void* &buf);
+    size_t Load(const void* &buf);
+
     friend class FuseRamFs;
     #ifdef DUMP_TESTING
     friend void dump_File(File* file);
