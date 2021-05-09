@@ -55,6 +55,10 @@ public:
      * Mainly intended for readdir() method. */
     const std::map<std::string, fuse_ino_t> &Children() { return m_children; }
 
+    size_t GetPickledSize();
+    size_t Pickle(void* &buf);
+    size_t Load(const void* &buf);
+
     std::shared_mutex& DirLock() { return childrenRwSem; }
     #ifdef DUMP_TESTING
     friend void dump_Directory(Directory* dir);

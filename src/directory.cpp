@@ -190,3 +190,75 @@ bool Directory::IsEmpty() {
     }
     return true;
 }
+
+size_t Directory::GetPickledSize() {
+    size_t res = Inode::GetPickledSize();
+    // the number of children
+    res += sizeof(size_t);
+    // iterate children
+    for (auto it = m_children.begin(); it != m_children.end(); ++it) {
+        // inode number
+        res += sizeof(fuse_ino_t);
+        // name length field
+        res += sizeof(size_t);
+        // size of file name
+        res += it->first.size();
+    }
+    return res;
+}
+
+size_t Directory::Pickle(void* &buf) {
+    if (buf == nullptr) {
+        buf = malloc(Directory::GetPickledSize());
+    }
+    if (buf == nullptr) {
+        return 0;
+    }
+    size_t offset = Inode::Pickle(buf);
+    char *ptr = (char *)buf + offset;
+    // store the number of children in this directory
+    size_t nchildren = m_children.size();
+    memcpy(ptr, &nchildren, sizeof(nchildren));
+    ptr += sizeof(nchildren);
+    // iterate children and store
+    for (auto it = m_children.begin(); it != m_children.end(); ++it) {
+        // store inode number
+        fuse_ino_t ino = it->second;
+        memcpy(ptr, &ino, sizeof(ino));
+        ptr += sizeof(ino);
+        // store the length of the file name
+        size_t namelen = it->first.size();
+        memcpy(ptr, &namelen, sizeof(namelen));
+        ptr += sizeof(namelen);
+        // store the name string
+        memcpy(ptr, it->first.c_str(), namelen);
+        ptr += namelen;
+    }
+    return ptr - (char *)buf;
+}
+
+size_t Directory::Load(const void* &buf) {
+    size_t offset = Inode::Load(buf);
+    const char *ptr = (const char *)buf + offset;
+    // get the number of children in the directory
+    size_t nchildren;
+    memcpy(&nchildren, ptr, sizeof(nchildren));
+    ptr += sizeof(nchildren);
+    // iterate the list and load the children
+    for (size_t i = 0; i < nchildren; ++i) {
+        // load inode number
+        fuse_ino_t ino;
+        memcpy(&ino, ptr, sizeof(ino));
+        ptr += sizeof(ino);
+        // load the length of the name
+        size_t namelen;
+        memcpy(&namelen, ptr, sizeof(namelen));
+        ptr += sizeof(namelen);
+        // load the string itself
+        std::string name(ptr, namelen);
+        ptr += namelen;
+        // add children to this Directory object
+        m_children.insert({name, ino});
+    }
+    return ptr - (char *)buf;
+}
