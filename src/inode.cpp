@@ -285,3 +285,107 @@ void Inode::Initialize(fuse_ino_t ino, mode_t mode, nlink_t nlink, gid_t gid, ui
     m_fuseEntryParam.attr.st_mtim = ts;
 #endif
 }
+
+size_t Inode::GetPickledSize() {
+    size_t res = 0;
+    res += sizeof(m_markedForDeletion) + sizeof(unsigned long) + sizeof(m_fuseEntryParam);
+    // xattrs
+    // a header telling how many xattrs there are
+    res += sizeof(size_t);
+    for (auto it = m_xattr.begin(); it != m_xattr.end(); ++it) {
+        // xattr key: <key_size><key_str>
+        res += sizeof(size_t);
+        res += it->first.size();
+        // xattr value: <val_size><val_data>
+        res += sizeof(size_t);
+        res += it->second.second;
+    }
+    return res;
+}
+
+size_t Inode::Pickle(void* &buf) {
+    if (buf == nullptr)
+        buf = malloc(GetPickledSize());
+    if (buf == nullptr)
+        return 0;
+  
+    char *ptr = (char *)buf;
+    // bool m_markedForDeletion;
+    *ptr++ = m_markedForDeletion;
+    // std::atomic_ulong m_nlookup;
+    unsigned long nlookup = m_nlookup.load();
+    memcpy(ptr, &nlookup, sizeof(nlookup));
+    ptr += sizeof(nlookup);
+    // struct fuse_entry_param m_fuseEntryParam;
+    memcpy(ptr, &m_fuseEntryParam, sizeof(m_fuseEntryParam));
+    ptr += sizeof(m_fuseEntryParam);
+    // how many xattrs are there
+    size_t num_xattrs = m_xattr.size();
+    memcpy(ptr, &num_xattrs, sizeof(num_xattrs));
+    ptr += sizeof(num_xattrs);
+    // pickle xattrs
+    for (auto it = m_xattr.begin(); it != m_xattr.end(); ++it) {
+        size_t keysize = it->first.size();
+        const char *keystr = it->first.c_str();
+        size_t valsize = it->second.second;
+        char *valdata = (char *)it->second.first;
+        memcpy(ptr, &keysize, sizeof(keysize));
+        ptr += sizeof(keysize);
+        memcpy(ptr, keystr, keysize);
+        ptr += keysize;
+        memcpy(ptr, &valsize, sizeof(valsize));
+        ptr += sizeof(valsize);
+        memcpy(ptr, valdata, valsize);
+        ptr += valsize;
+    }
+    return (size_t)(ptr - (char *)buf);
+}
+
+/* Inode pickle format: 
+ * |--m_markedForDeletion--|--m_nlookup--|-------m_fuseEntryParam--------|...
+ * --num_xattrs--|--xattr1_keysize--|-----xattr1_keystr-----|--xattr1_valsize--|...
+ * ------xattr1_valdata-------|--xattr2_keysize--|-----xattr2_keystr-----|...
+ * --xattr2_valsize--|-------xattr2_valdata-------|--xattr3_keysize--|--xattr3_...--|...
+ */
+
+size_t Inode::Load(const void* &buf) {
+    const char *ptr = (const char *)buf;
+    // bool m_markedForDeletion
+    m_markedForDeletion = *ptr++;
+    // std::atomic_ulong m_nlookup;
+    unsigned long nlookup;
+    memcpy(&nlookup, ptr, sizeof(nlookup));
+    m_nlookup.store(nlookup);
+    ptr += sizeof(nlookup);
+    // struct fuse_entry_param m_fuseEntryParam;
+    memcpy(&m_fuseEntryParam, ptr, sizeof(m_fuseEntryParam));
+    ptr += sizeof(m_fuseEntryParam);
+    // num_xattrs
+    size_t n_xattrs;
+    memcpy(&n_xattrs, ptr, sizeof(n_xattrs));
+    ptr += sizeof(n_xattrs);
+    // load xattrs
+    for (size_t i = 0; i < n_xattrs; ++i) {
+        // key
+        size_t keysize;
+        memcpy(&keysize, ptr, sizeof(keysize));
+        ptr += sizeof(keysize);
+        std::string key(ptr, keysize);
+        ptr += keysize;
+        // value
+        size_t valsize;
+        memcpy(&valsize, ptr, sizeof(valsize));
+        ptr += sizeof(valsize);
+        char *value = (char *)malloc(valsize);
+        if (value == nullptr)
+            goto error;
+        memcpy(value, ptr, valsize);
+        ptr += valsize;
+        // add to xattrs tree
+        m_xattr.insert({key, {value, valsize}});
+    }
+    return ptr - (char *)buf;
+error:
+    ClearXAttrs();
+    return 0;
+}

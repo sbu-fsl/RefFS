@@ -17,6 +17,13 @@ protected:
     std::shared_mutex entryRwSem;
     std::map<std::string, std::pair<void *, size_t> > m_xattr;
     std::shared_mutex xattrRwSem;
+
+    void ClearXAttrs() {
+        for (auto it = m_xattr.begin(); it != m_xattr.end(); ++it) {
+            free(it->second.first);
+        }
+        m_xattr.clear();
+    }
     
 public:
     static const size_t BufBlockSize = 512;
@@ -85,6 +92,24 @@ public:
     fuse_ino_t GetIno() { return m_fuseEntryParam.attr.st_ino; }
     
     bool Forgotten() { return m_nlookup == 0; }
+
+    virtual size_t GetPickledSize();
+
+    /* Pickle: Serialize the Inode object.
+     *
+     * NOTE: This function does NOT consider implementation or architecture
+     * specific data type length or byte order, so it's not recommended to
+     * pickle and unpickle on different machines. 
+     *
+     * @param[in] The pointer to the buffer. If the buffer is nullptr, Pickle
+     * will automatically allocate sufficient buffer to store the data.
+     * If buf is not null, it must provide at least GetPickledSize() bytes of
+     * buffer, otherwise the behavior is undefined.
+     *
+     * @return The size of serialized object
+     */
+    virtual size_t Pickle(void* &buf);
+    virtual size_t Load(const void* &buf);
 
     friend class FuseRamFs;
     friend class File;
