@@ -6,6 +6,11 @@ extern "C" {
 #endif
 #include <sys/ioctl.h>
 
+struct verifs_str {
+  size_t len;
+  char *str;
+};
+
 #define VERIFS2_IOC_CODE    '1'
 #define VERIFS2_IOC_NO(x)   (VERIFS2_IOC_CODE + (x))
 #define VERIFS2_IOC(n)      _IO(VERIFS2_IOC_CODE, VERIFS2_IOC_NO(n))
@@ -14,6 +19,11 @@ extern "C" {
 
 #define VERIFS_CHECKPOINT  VERIFS2_IOC(1)
 #define VERIFS_RESTORE     VERIFS2_IOC(2)
+
+// the PICKLE and LOAD should receive a parameter of `struct verifs_str` which
+// contains the path to the output / input file.
+#define VERIFS_PICKLE      VERIFS2_SET_IOC(3, struct verifs_str)
+#define VERIFS_LOAD        VERIFS2_SET_IOC(4, struct verifs_str)
 
 #ifdef __cplusplus
 }
