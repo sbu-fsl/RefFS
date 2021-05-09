@@ -10,6 +10,7 @@ private:
     std::string m_link;
     
 public:
+    SymLink() : m_link("") {};
     SymLink(const std::string &link) :
     m_link(link) {};
 
@@ -24,8 +25,12 @@ public:
     
     void Initialize(fuse_ino_t ino, mode_t mode, nlink_t nlink, gid_t gid, uid_t uid);
     
-    
     const std::string &Link() { return m_link; }
+
+    size_t GetPickledSize();
+    size_t Pickle(void* &buf);
+    size_t Load(const void* &buf);
+
     #ifdef DUMP_TESTING
     friend void dump_SymLink(SymLink* m_link);
     #endif
