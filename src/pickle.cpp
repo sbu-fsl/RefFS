@@ -39,34 +39,34 @@ void feed_hash(SHA256_CTX *hashctx, const void *data, size_t len) {
         throw pickle_error(EPROTO);
 }
 
-size_t write_to_file(FILE *fp, const void *buf, size_t count) {
+size_t write_to_file(int fd, const void *buf, size_t count) {
     errno = 0;
-    size_t res = fwrite(buf, 1, count, fp);
+    size_t res = write(fd, buf, count);
     if (res < count) {
         throw pickle_error(errno);
     }
     return res;
 }
 
-static inline size_t write_and_hash(FILE *fp, SHA256_CTX *hashctx,
+static inline size_t write_and_hash(int fd, SHA256_CTX *hashctx,
                                     const void *data, size_t count) {
-    size_t res = write_to_file(fp, data, count);
+    size_t res = write_to_file(fd, data, count);
     feed_hash(hashctx, data, count);
     return res;
 }
 
-int pickle_file_system(FILE *fp, std::vector<Inode *>& inodes,
+int pickle_file_system(int fd, std::vector<Inode *>& inodes,
                        std::queue<fuse_ino_t>& pending_delete_inodes,
                        struct statvfs &fs_stat, SHA256_CTX *hashctx) {
     /* Remember the current file cursor;
      * if pickling fails, move the cursor here. */
-    long fpos = ftell(fp);
+    off_t fpos = lseek(fd, 0, SEEK_CUR);
     try {
         // pickle statvfs
-        write_and_hash(fp, hashctx, &fs_stat, sizeof(fs_stat));
+        write_and_hash(fd, hashctx, &fs_stat, sizeof(fs_stat));
         // pickle inodes
         size_t num_inodes = inodes.size();
-        write_and_hash(fp, hashctx, &num_inodes, sizeof(num_inodes));
+        write_and_hash(fd, hashctx, &num_inodes, sizeof(num_inodes));
         for (size_t i = 0; i < num_inodes; ++i) {
             Inode *inode = inodes[i];
             size_t pickled_size = inode->GetPickledSize();
@@ -77,23 +77,23 @@ int pickle_file_system(FILE *fp, std::vector<Inode *>& inodes,
             /* Should not fail, because the buffer is preallocated */
             inode->Pickle(data);
             mode_t filemode = inode->GetMode();
-            write_and_hash(fp, hashctx, &filemode, sizeof(filemode));
-            write_and_hash(fp, hashctx, data, pickled_size);
+            write_and_hash(fd, hashctx, &filemode, sizeof(filemode));
+            write_and_hash(fd, hashctx, data, pickled_size);
         }
         // pickle the list of pending delete inodes
         size_t num_pending_delete = pending_delete_inodes.size();
-        write_and_hash(fp, hashctx, &num_pending_delete,
+        write_and_hash(fd, hashctx, &num_pending_delete,
                        sizeof(num_pending_delete));
         /* Note that pending_delete_inodes is a queue, therefore the only way
          * to iterate through it is to pop all the elements in a vector */
         for (size_t i = 0; i < num_pending_delete; ++i) {
             fuse_ino_t ino = pending_delete_inodes.front();
-            write_and_hash(fp, hashctx, &ino, sizeof(ino));
+            write_and_hash(fd, hashctx, &ino, sizeof(ino));
             pending_delete_inodes.pop();
             pending_delete_inodes.push(ino);
         }
     } catch (const pickle_error& e) {
-        fseek(fp, fpos, SEEK_SET);
+        lseek(fd, fpos, SEEK_SET);
         return -e.get_errno();
     }
     return 0;
