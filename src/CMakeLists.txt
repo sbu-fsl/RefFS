@@ -21,7 +21,7 @@ elseif(UNIX) # Linux, BSD etc
   target_link_libraries(ckpt fuse)
   target_link_libraries(restore fuse)
 endif()
-target_link_libraries(fuse-cpp-ramfs pthread)
+target_link_libraries(fuse-cpp-ramfs pthread ssl crypto mcfs)
 target_link_libraries(ckpt pthread)
 target_link_libraries(restore pthread)
 install(TARGETS fuse-cpp-ramfs DESTINATION bin)
