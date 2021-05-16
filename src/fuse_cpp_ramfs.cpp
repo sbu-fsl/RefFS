@@ -350,6 +350,10 @@ void FuseRamFs::FuseIoctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
         case VERIFS_RESTORE:
             ret = restore((uint64_t)arg);
             break;
+
+        case VERIFS_PICKLE:
+            ret = pickle_verifs2(req, arg);
+            break;
         
         default:
             std::cerr << "Function Not implemented in FuseIoctl.\n";
