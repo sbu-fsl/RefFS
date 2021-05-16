@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.2)
 set(CMAKE_BUILD_TYPE Debug)
 # preprocessor for verifying Checkpoint/Restore APIs
 #add_definitions(-DDUMP_TESTING)
-add_executable(fuse-cpp-ramfs main.cpp directory.cpp inode.cpp symlink.cpp file.cpp util.cpp fuse_cpp_ramfs.cpp special_inode.cpp cr_util.cpp)
+add_executable(fuse-cpp-ramfs main.cpp directory.cpp inode.cpp symlink.cpp file.cpp util.cpp fuse_cpp_ramfs.cpp special_inode.cpp cr_util.cpp pickle.cpp)
 add_executable(ckpt ckpt.cpp testops.cpp)
 add_executable(restore restore.cpp testops.cpp)
 set_property(TARGET fuse-cpp-ramfs PROPERTY CXX_STANDARD 17)
