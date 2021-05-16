@@ -9,6 +9,7 @@
 #include "directory.hpp"
 #include "symlink.hpp"
 #include "special_inode.hpp"
+#include "fuse_cpp_ramfs.hpp"
 
 class pickle_error : public std::exception {
 public:
@@ -31,7 +32,12 @@ public:
     }
 };
 
-void feed_hash(SHA256_CTX *hashctx, const void *data, size_t len) {
+struct state_file_header {
+    size_t fsize;
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+};
+
+static void feed_hash(SHA256_CTX *hashctx, const void *data, size_t len) {
     if (hashctx == nullptr)
         return;
     int ret = SHA256_Update(hashctx, data, len);
@@ -39,7 +45,7 @@ void feed_hash(SHA256_CTX *hashctx, const void *data, size_t len) {
         throw pickle_error(EPROTO);
 }
 
-size_t write_to_file(int fd, const void *buf, size_t count) {
+static size_t write_to_file(int fd, const void *buf, size_t count) {
     errno = 0;
     size_t res = write(fd, buf, count);
     if (res < count) {
@@ -99,16 +105,155 @@ int pickle_file_system(int fd, std::vector<Inode *>& inodes,
     return 0;
 }
 
+static char *fetch_filepath(fuse_req_t req, void *strobj) {
+    // retrieve the verifs_str body
+    struct verifs_str str;
+    struct iovec in1 = {
+        .iov_base = strobj, .iov_len = sizeof(struct verifs_str)
+    };
+    struct iovec out1 = {
+        .iov_base = &str, .iov_len = sizeof(str)
+    };
+    int res = fuse_reply_ioctl_retry(req, &in1, 1, &out1, 1);
+    if (res < 0) {
+        // res is negative on error
+        throw pickle_error(-res);
+    }
+
+    // retrieve the path string
+    char *path = (char *)calloc(str.len, 1);
+    if (path == nullptr)
+        throw pickle_error(ENOMEM);
+    struct iovec in2 = {
+        .iov_base = str.str, .iov_len = str.len
+    };
+    struct iovec out2 = {
+        .iov_base = path, .iov_len = str.len
+    };
+    res = fuse_reply_ioctl_retry(req, &in2, 1, &out2, 1);
+    if (res < 0)
+        throw pickle_error(-res);
+
+    return path;
+}
+
+int FuseRamFs::pickle_verifs2(fuse_req_t req, void *strobj) {
+    char *path = nullptr;
+    int fd = -1;
+    int res = 0;
+    try {
+        path = fetch_filepath(req, strobj);
+        fd = open(path, O_RDWR | O_CREAT | O_TRUNC, 0644);
+        if (fd < 0)
+            throw pickle_error(errno);
+        // skip the header
+        res = lseek(fd, sizeof(struct state_file_header), SEEK_SET);
+        if (res < 0)
+            throw pickle_error(errno);
+        // pickle the file system data and metadata
+        SHA256_CTX hashctx;
+        SHA256_Init(&hashctx);
+        res = pickle_file_system(fd, FuseRamFs::Inodes,
+                                 FuseRamFs::DeletedInodes,
+                                 FuseRamFs::m_stbuf, &hashctx);
+        if (res < 0)
+            throw pickle_error(errno);
+        // lastly: write the header
+        off_t filelen = lseek(fd, 0, SEEK_CUR);
+        struct state_file_header header = {0};
+        header.fsize = filelen;
+        SHA256_Final(header.hash, &hashctx);
+        res = lseek(fd, 0, SEEK_SET);
+        if (res < 0)
+            throw pickle_error(errno);
+        res = write(fd, &header, sizeof(header));
+        if (res >= 0) {
+            res = 0;
+        } else {
+            res = -errno;
+        }
+    } catch (const pickle_error &e) {
+        res = -e.get_errno();
+    }
+    if (path)
+        free(path);
+    if (fd > 0)
+        close(fd);
+    return res;
+}
+
+static int verify_file_size(int fd, size_t expected) {
+    struct stat info;
+    int res = fstat(fd, &info);
+    if (res < 0)
+        return errno;
+    return (info.st_size == expected) ? 0 : -1;
+}
+
+static int verify_file_integrity(int fd, unsigned char *expected) {
+    const size_t blocksize = 4096;
+    unsigned char hashres[SHA256_DIGEST_LENGTH] = {0};
+    char buf[blocksize];
+    SHA256_CTX hashctx;
+
+    int res = SHA256_Init(&hashctx);
+    if (res == 0)
+        return -2;
+
+    ssize_t readsz;
+    while ((readsz = read(fd, buf, blocksize)) > 0) {
+        SHA256_Update(&hashctx, buf, readsz);
+    }
+    if (readsz < 0)
+        return errno;
+
+    SHA256_Final(hashres, &hashctx);
+    return (memcmp(hashres, expected, SHA256_DIGEST_LENGTH) == 0) ? 0 : -3;
+}
+
+/* verify_state_file: Verify the integrity of the state file
+ *
+ * @param[fd] - File descriptor
+ *
+ * @return: 0 for success; positive integer for an error number resulted from
+ * failed system call; -1 for file size mismatch; -2 for hash error; -3 for
+ * mismatch sha256 hash digest.
+ */
+int verify_state_file(int fd) {
+    struct state_file_header header;
+    // read the header
+    int res = lseek(fd, 0, SEEK_SET);
+    if (res < 0)
+        return errno;
+
+    ssize_t readsz = read(fd, &header, sizeof(header));
+    if (readsz < 0)
+        return errno;
+    else if (readsz < sizeof(header))
+        return ENOSPC;
+
+    // validate if the file size and the size recorded in the header match
+    if ((res = verify_file_size(fd, header.fsize)) != 0)
+        return res;
+
+    // start reading the whole file and calculating the hash
+    if ((res = verify_file_integrity(fd, header.hash)) != 0)
+        return res;
+
+    lseek(fd, sizeof(header), SEEK_SET);
+    return 0;
+}
+
 /* load_file_system: Load the file system from pickled data.
- * 
+ *
  * NOTE: load_file_system() expects a memory buffer or a mmap'ed area
  * instead of a FILE object.
- * 
+ *
  * @param[in]  data: pointer to the pickled data
  * @param[out] inodes: Inode table
  * @param[out] pending_del_inodes: The queue of pending deleted inodes
  * @param[out] fs_stat: File system statistics info
- * 
+ *
  * @return: bytes used
  */
 ssize_t load_file_system(const void *data, std::vector<Inode *>& inodes,
