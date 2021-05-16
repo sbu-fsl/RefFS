@@ -14,13 +14,21 @@
 class pickle_error : public std::exception {
 public:
     int _errno;
+    std::string func;
+    int line;
 
-    pickle_error(int err) noexcept {
+    pickle_error(int err, std::string func, int line) noexcept {
         _errno = err;
+        this->func = func;
+        this->line;
+        fprintf(stderr, "Pickling error %s(%d) at %s:%d.\n",
+                errnoname(_errno), _errno, func.c_str(), line);
     }
 
     pickle_error(const pickle_error& other) {
         _errno = other._errno;
+        func = other.func;
+        line = other.line;
     }
 
     const char *what() const noexcept {
@@ -42,14 +50,14 @@ static void feed_hash(SHA256_CTX *hashctx, const void *data, size_t len) {
         return;
     int ret = SHA256_Update(hashctx, data, len);
     if (ret == 0)
-        throw pickle_error(EPROTO);
+        throw pickle_error(EPROTO, __func__, __LINE__);
 }
 
 static size_t write_to_file(int fd, const void *buf, size_t count) {
     errno = 0;
     size_t res = write(fd, buf, count);
     if (res < count) {
-        throw pickle_error(errno);
+        throw pickle_error(errno, __func__, __LINE__);
     }
     return res;
 }
@@ -78,7 +86,7 @@ int pickle_file_system(int fd, std::vector<Inode *>& inodes,
             size_t pickled_size = inode->GetPickledSize();
             void *data = malloc(pickled_size);
             if (data == nullptr) {
-                throw pickle_error(ENOMEM);
+                throw pickle_error(ENOMEM, __func__, __LINE__);
             }
             /* Should not fail, because the buffer is preallocated */
             inode->Pickle(data);
@@ -117,13 +125,13 @@ static char *fetch_filepath(fuse_req_t req, void *strobj) {
     int res = fuse_reply_ioctl_retry(req, &in1, 1, &out1, 1);
     if (res < 0) {
         // res is negative on error
-        throw pickle_error(-res);
+        throw pickle_error(-res, __func__, __LINE__);
     }
 
     // retrieve the path string
     char *path = (char *)calloc(str.len, 1);
     if (path == nullptr)
-        throw pickle_error(ENOMEM);
+        throw pickle_error(ENOMEM, __func__, __LINE__);
     struct iovec in2 = {
         .iov_base = str.str, .iov_len = str.len
     };
@@ -132,7 +140,7 @@ static char *fetch_filepath(fuse_req_t req, void *strobj) {
     };
     res = fuse_reply_ioctl_retry(req, &in2, 1, &out2, 1);
     if (res < 0)
-        throw pickle_error(-res);
+        throw pickle_error(-res, __func__, __LINE__);
 
     return path;
 }
@@ -145,11 +153,11 @@ int FuseRamFs::pickle_verifs2(fuse_req_t req, void *strobj) {
         path = fetch_filepath(req, strobj);
         fd = open(path, O_RDWR | O_CREAT | O_TRUNC, 0644);
         if (fd < 0)
-            throw pickle_error(errno);
+            throw pickle_error(errno, __func__, __LINE__);
         // skip the header
         res = lseek(fd, sizeof(struct state_file_header), SEEK_SET);
         if (res < 0)
-            throw pickle_error(errno);
+            throw pickle_error(errno, __func__, __LINE__);
         // pickle the file system data and metadata
         SHA256_CTX hashctx;
         SHA256_Init(&hashctx);
@@ -157,7 +165,7 @@ int FuseRamFs::pickle_verifs2(fuse_req_t req, void *strobj) {
                                  FuseRamFs::DeletedInodes,
                                  FuseRamFs::m_stbuf, &hashctx);
         if (res < 0)
-            throw pickle_error(errno);
+            throw pickle_error(errno, __func__, __LINE__);
         // lastly: write the header
         off_t filelen = lseek(fd, 0, SEEK_CUR);
         struct state_file_header header = {0};
@@ -165,7 +173,7 @@ int FuseRamFs::pickle_verifs2(fuse_req_t req, void *strobj) {
         SHA256_Final(header.hash, &hashctx);
         res = lseek(fd, 0, SEEK_SET);
         if (res < 0)
-            throw pickle_error(errno);
+            throw pickle_error(errno, __func__, __LINE__);
         res = write(fd, &header, sizeof(header));
         if (res >= 0) {
             res = 0;
@@ -293,11 +301,11 @@ ssize_t load_file_system(const void *data, std::vector<Inode *>& inodes,
                 res = special->Load(ptr2);
                 inodes.push_back(special);
             } else {
-                throw pickle_error(EINVAL);
+                throw pickle_error(EINVAL, __func__, __LINE__);
             }
 
             if (res == 0) {
-                throw pickle_error(ENOMEM);
+                throw pickle_error(ENOMEM, __func__, __LINE__);
             }
             ptr += res;
         }
