@@ -113,44 +113,35 @@ int pickle_file_system(int fd, std::vector<Inode *>& inodes,
     return 0;
 }
 
-static char *fetch_filepath(fuse_req_t req, void *strobj) {
-    // retrieve the verifs_str body
-    struct verifs_str str;
-    struct iovec in1 = {
-        .iov_base = strobj, .iov_len = sizeof(struct verifs_str)
-    };
-    struct iovec out1 = {
-        .iov_base = &str, .iov_len = sizeof(str)
-    };
-    int res = fuse_reply_ioctl_retry(req, &in1, 1, &out1, 1);
-    if (res < 0) {
-        // res is negative on error
-        throw pickle_error(-res, __func__, __LINE__);
+static char *fetch_filepath(void) {
+    int cfgfd = open(VERIFS_PICKLE_CFG, O_RDONLY);
+    if (cfgfd < 0)
+        throw pickle_error(errno, __func__, __LINE__);
+
+    char *path = (char *)calloc(PATH_MAX, 1);
+    if (path == nullptr) {
+        close(cfgfd);
+        throw pickle_error(ENOMEM, __func__, __LINE__);
     }
 
-    // retrieve the path string
-    char *path = (char *)calloc(str.len, 1);
-    if (path == nullptr)
-        throw pickle_error(ENOMEM, __func__, __LINE__);
-    struct iovec in2 = {
-        .iov_base = str.str, .iov_len = str.len
-    };
-    struct iovec out2 = {
-        .iov_base = path, .iov_len = str.len
-    };
-    res = fuse_reply_ioctl_retry(req, &in2, 1, &out2, 1);
-    if (res < 0)
-        throw pickle_error(-res, __func__, __LINE__);
-
+    ssize_t res = read(cfgfd, path, PATH_MAX);
+    if (res < 0) {
+        close(cfgfd);
+        throw pickle_error(errno, __func__, __LINE__);
+    }
+    
+    size_t pathlen = strnlen(path, PATH_MAX);
+    path = (char *)realloc(path, pathlen + 1);
+    close(cfgfd);
     return path;
 }
 
-int FuseRamFs::pickle_verifs2(fuse_req_t req, void *strobj) {
+int FuseRamFs::pickle_verifs2(void) {
     char *path = nullptr;
     int fd = -1;
     int res = 0;
     try {
-        path = fetch_filepath(req, strobj);
+        path = fetch_filepath();
         fd = open(path, O_RDWR | O_CREAT | O_TRUNC, 0644);
         if (fd < 0)
             throw pickle_error(errno, __func__, __LINE__);

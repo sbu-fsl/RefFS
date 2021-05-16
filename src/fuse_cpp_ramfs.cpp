@@ -352,7 +352,7 @@ void FuseRamFs::FuseIoctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
             break;
 
         case VERIFS_PICKLE:
-            ret = pickle_verifs2(req, arg);
+            ret = pickle_verifs2();
             break;
         
         default:

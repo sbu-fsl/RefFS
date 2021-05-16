@@ -43,8 +43,8 @@ private:
     static void invalidate_kernel_states();
     static int restore(uint64_t key);
     static void check_restored_inode_size();
-    static int pickle_verifs2(fuse_req_t req, void *strobj);
-    static int load_verifs2(fuse_req_t req, void *strobj);
+    static int pickle_verifs2(void);
+    static int load_verifs2(void);
 
     /* Atomic inode table operations */
     static void DeleteInode(fuse_ino_t ino) {
