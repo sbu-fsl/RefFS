@@ -20,6 +20,7 @@ extern "C" {
 #define VERIFS_PICKLE      VERIFS2_IOC(3)
 #define VERIFS_LOAD        VERIFS2_IOC(4)
 #define VERIFS_PICKLE_CFG  "/tmp/pickle.cfg"
+#define VERIFS_LOAD_CFG    "/tmp/pickle.cfg"
 
 #ifdef __cplusplus
 }
