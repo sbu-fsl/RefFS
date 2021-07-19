@@ -3,6 +3,7 @@
 #include <mcfs/errnoname.h>
 #include <exception>
 #include <openssl/sha.h>
+#include <sys/mman.h>
 
 #include "inode.hpp"
 #include "file.hpp"
@@ -45,6 +46,11 @@ struct state_file_header {
     unsigned char hash[SHA256_DIGEST_LENGTH];
 };
 
+struct inode_state {
+    bool exist;
+    mode_t mode;
+};
+
 static void feed_hash(SHA256_CTX *hashctx, const void *data, size_t len) {
     if (hashctx == nullptr)
         return;
@@ -83,6 +89,12 @@ int pickle_file_system(int fd, std::vector<Inode *>& inodes,
         write_and_hash(fd, hashctx, &num_inodes, sizeof(num_inodes));
         for (size_t i = 0; i < num_inodes; ++i) {
             Inode *inode = inodes[i];
+            struct inode_state iinfo = {0};
+            if (inode == nullptr) {
+                iinfo.exist = false;
+                write_and_hash(fd, hashctx, &iinfo, sizeof(iinfo));
+                continue;
+            }
             size_t pickled_size = inode->GetPickledSize();
             void *data = malloc(pickled_size);
             if (data == nullptr) {
@@ -90,8 +102,9 @@ int pickle_file_system(int fd, std::vector<Inode *>& inodes,
             }
             /* Should not fail, because the buffer is preallocated */
             inode->Pickle(data);
-            mode_t filemode = inode->GetMode();
-            write_and_hash(fd, hashctx, &filemode, sizeof(filemode));
+            iinfo.mode = inode->GetMode();
+            iinfo.exist = true;
+            write_and_hash(fd, hashctx, &iinfo, sizeof(iinfo));
             write_and_hash(fd, hashctx, data, pickled_size);
         }
         // pickle the list of pending delete inodes
@@ -113,8 +126,8 @@ int pickle_file_system(int fd, std::vector<Inode *>& inodes,
     return 0;
 }
 
-static char *fetch_filepath(void) {
-    int cfgfd = open(VERIFS_PICKLE_CFG, O_RDONLY);
+static char *fetch_filepath(const char *cfgpath) {
+    int cfgfd = open(cfgpath, O_RDONLY);
     if (cfgfd < 0)
         throw pickle_error(errno, __func__, __LINE__);
 
@@ -141,7 +154,7 @@ int FuseRamFs::pickle_verifs2(void) {
     int fd = -1;
     int res = 0;
     try {
-        path = fetch_filepath();
+        path = fetch_filepath(VERIFS_PICKLE_CFG);
         fd = open(path, O_RDWR | O_CREAT | O_TRUNC, 0644);
         if (fd < 0)
             throw pickle_error(errno, __func__, __LINE__);
@@ -268,26 +281,28 @@ ssize_t load_file_system(const void *data, std::vector<Inode *>& inodes,
         memcpy(&num_inodes, ptr, sizeof(num_inodes));
         ptr += sizeof(num_inodes);
         for (size_t i = 0; i < num_inodes; ++i) {
-            mode_t filemode;
-            size_t res;
-            memcpy(&filemode, ptr, sizeof(filemode));
-            ptr += filemode;
-            const void *ptr2 = (const void *)ptr;
+            struct inode_state iinfo;
+            memcpy(&iinfo, ptr, sizeof(iinfo));
+            ptr += sizeof(iinfo);
+            if (!iinfo.exist)
+                continue;
 
-            if (S_ISREG(filemode)) {
+            size_t res;
+            const void *ptr2 = (const void *)ptr;
+            if (S_ISREG(iinfo.mode)) {
                 File *file = new File();
                 res = file->Load(ptr2);
                 inodes.push_back(file);
-            } else if (S_ISDIR(filemode)) {
+            } else if (S_ISDIR(iinfo.mode)) {
                 Directory *dir = new Directory();
                 res = dir->Load(ptr2);
                 inodes.push_back(dir);
-            } else if (S_ISLNK(filemode)) {
+            } else if (S_ISLNK(iinfo.mode)) {
                 SymLink *link = new SymLink();
                 res = link->Load(ptr2);
                 inodes.push_back(link);
-            } else if (S_ISCHR(filemode) || S_ISBLK(filemode) ||
-                S_ISSOCK(filemode) || S_ISFIFO(filemode) || filemode == 0) {
+            } else if (S_ISCHR(iinfo.mode) || S_ISBLK(iinfo.mode) ||
+                S_ISSOCK(iinfo.mode) || S_ISFIFO(iinfo.mode) || iinfo.mode == 0) {
                 SpecialInode *special = new SpecialInode();
                 res = special->Load(ptr2);
                 inodes.push_back(special);
@@ -304,4 +319,62 @@ ssize_t load_file_system(const void *data, std::vector<Inode *>& inodes,
         return -e.get_errno();
     }
     return ptr - (const char *)data;
+}
+
+static size_t get_fsize(int fd) {
+    struct stat info;
+    int res = fstat(fd, &info);
+    if (res < 0) {
+        throw pickle_error(errno, __func__, __LINE__);
+    }
+    return info.st_size;
+}
+
+int FuseRamFs::load_verifs2(void) {
+    char *path = nullptr;
+    void *mapped = nullptr;
+    int fd = -1, res = 0;
+    size_t content_size = 0;
+    try {
+        path = fetch_filepath(VERIFS_LOAD_CFG);
+        fd = open(path, O_RDONLY);
+        if (fd < 0)
+            throw pickle_error(errno, __func__, __LINE__);
+        // verify integrity of the input state file
+        res = verify_state_file(fd);
+        if (res > 0) {
+            throw pickle_error(res, __func__, __LINE__);
+        } else if (res == -1) {
+            // res == -1: size mismatches
+            throw pickle_error(EMSGSIZE, __func__, __LINE__);
+        } else if (res == -2) {
+            // res == -2: error occurred when hashing
+            throw pickle_error(EPROTO, __func__, __LINE__);
+        } else if (res == -3) {
+            // res == -3: hash mismatch
+            throw pickle_error(EINVAL, __func__, __LINE__);
+        }
+        // mmap the file
+        content_size = get_fsize(fd);
+        mapped = mmap(nullptr, content_size, PROT_READ, MAP_SHARED, fd, 0);
+        if (mapped == MAP_FAILED)
+            throw pickle_error(errno, __func__, __LINE__);
+        // load the file system
+        FuseRamFs::Inodes.clear();
+        while (!FuseRamFs::DeletedInodes.empty())
+            FuseRamFs::DeletedInodes.pop();
+        char *ptr = (char *)mapped + sizeof(state_file_header);
+        load_file_system(ptr, FuseRamFs::Inodes, FuseRamFs::DeletedInodes,
+                         FuseRamFs::m_stbuf);
+    } catch (const pickle_error &e) {
+        res = -e.get_errno();
+    }
+    if (mapped)
+        munmap(mapped, content_size);
+    if (fd >= 0)
+        close(fd);
+    if (path)
+        free(path);
+    
+    return res;
 }
