@@ -19,7 +19,7 @@ int main(int argc, char **argv)
     }
 
     // write the config file to pass the output file path
-    int cfgfd = open(VERIFS_LOAD_CFG, O_WRONLY | O_CREAT | O_TRUNC);
+    int cfgfd = open(VERIFS_LOAD_CFG, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (cfgfd < 0) {
         fprintf(stderr, "Cannot open/create %s: (%d:%s)\n", VERIFS_LOAD_CFG,
                 errno, errnoname(errno));

@@ -4,8 +4,7 @@
 #include "common.h"
 #include "cr.h"
 
-int main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
     if (argc < 3) {
         fprintf(stderr, "Usage: %s <mountpoint> <output-file>\n", argv[0]);
         exit(1);
@@ -19,7 +18,7 @@ int main(int argc, char **argv)
     }
 
     // write the config file to pass the output file path
-    int cfgfd = open(VERIFS_PICKLE_CFG, O_WRONLY | O_CREAT | O_TRUNC);
+    int cfgfd = open(VERIFS_PICKLE_CFG, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (cfgfd < 0) {
         fprintf(stderr, "Cannot open/create %s: (%d:%s)\n", VERIFS_PICKLE_CFG,
                 errno, errnoname(errno));
