@@ -5,7 +5,7 @@
 #include "fuse_cpp_ramfs.hpp"
 #include "testops.h"
 
-std::string MOUNTPOINT = VERIFS2_MOUNTPOINT;
+//std::string MOUNTPOINT = VERIFS2_MOUNTPOINT;
 
 int main(int argc, char **argv)
 {

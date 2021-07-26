@@ -119,6 +119,38 @@ int pickle_file_system(int fd, std::vector<Inode *>& inodes,
             pending_delete_inodes.pop();
             pending_delete_inodes.push(ino);
         }
+
+        size_t num_state_pool = state_pool.size();
+        write_and_hash(fd, hashctx, &num_state_pool, sizeof(num_state_pool));
+        for (const auto &state: state_pool) {
+            uint64_t key=state.first;
+            write_and_hash(fd, hashctx, &key, sizeof(key));
+            std::tuple
+                    <std::vector <Inode *>, std::queue<fuse_ino_t>,
+                    struct statvfs> stored_states=state.second;
+            std::vector <Inode *> stored_files = std::get<0>(stored_states);
+            size_t num_stored_files = stored_files.size();
+            write_and_hash(fd, hashctx, &num_stored_files, sizeof(num_stored_files));
+
+            for(const auto &stored_file:stored_files){
+                write_and_hash(fd, hashctx, &stored_file, sizeof(stored_file));
+            }
+
+            std::queue<fuse_ino_t> stored_DeletedInodes = std::get<1>(stored_states);
+            size_t num_stored_DeletedInodes = stored_DeletedInodes.size();
+            write_and_hash(fd, hashctx, &num_stored_DeletedInodes, sizeof(num_stored_DeletedInodes));
+
+            for (size_t i = 0; i < num_stored_DeletedInodes; ++i) {
+                fuse_ino_t ino = stored_DeletedInodes.front();
+                write_and_hash(fd, hashctx, &ino, sizeof(ino));
+                stored_DeletedInodes.pop();
+                stored_DeletedInodes.push(ino);
+            }
+
+            struct statvfs stored_m_stbuf = std::get<2>(stored_states);
+            write_and_hash(fd, hashctx, &stored_m_stbuf, sizeof(stored_m_stbuf));
+        }
+
     } catch (const pickle_error& e) {
         lseek(fd, fpos, SEEK_SET);
         return -e.get_errno();
@@ -269,7 +301,7 @@ int verify_state_file(int fd) {
  * @return: bytes used
  */
 ssize_t load_file_system(const void *data, std::vector<Inode *>& inodes,
-                     std::queue<fuse_ino_t>& pending_del_inodes,
+                     std::queue<fuse_ino_t>& pending_delete_inodes,
                      struct statvfs &fs_stat) {
     const char *ptr = (const char *)data;
     try {
@@ -315,6 +347,17 @@ ssize_t load_file_system(const void *data, std::vector<Inode *>& inodes,
             }
             ptr += res;
         }
+        size_t num_pending_delete;
+        memcpy(&num_pending_delete, ptr, sizeof(num_pending_delete));
+        ptr += sizeof(num_pending_delete);
+        for (size_t i = 0; i < num_pending_delete; ++i) {
+            fuse_ino_t ino;
+            memcpy(&ino, ptr, sizeof(ino));
+            ptr += sizeof(ino);
+            pending_delete_inodes.push(ino);
+        }
+
+
     } catch (const pickle_error& e) {
         return -e.get_errno();
     }
