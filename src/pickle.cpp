@@ -120,7 +120,7 @@ int pickle_file_system(int fd, std::vector<Inode *>& inodes,
             pending_delete_inodes.push(ino);
         }
 
-        size_t num_state_pool = state_pool.size();
+        /*size_t num_state_pool = state_pool.size();
         write_and_hash(fd, hashctx, &num_state_pool, sizeof(num_state_pool));
         for (const auto &state: state_pool) {
             uint64_t key=state.first;
@@ -149,7 +149,7 @@ int pickle_file_system(int fd, std::vector<Inode *>& inodes,
 
             struct statvfs stored_m_stbuf = std::get<2>(stored_states);
             write_and_hash(fd, hashctx, &stored_m_stbuf, sizeof(stored_m_stbuf));
-        }
+        }*/
 
     } catch (const pickle_error& e) {
         lseek(fd, fpos, SEEK_SET);
