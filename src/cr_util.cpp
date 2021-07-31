@@ -14,8 +14,8 @@ void print_ino_queue(std::queue<fuse_ino_t> DeletedInodes);
 std::unordered_map<uint64_t, verifs2_state > state_pool;
 
 int insert_state(uint64_t key, 
-                  std::tuple<std::vector <Inode *>, std::queue<fuse_ino_t>, 
-                  struct statvfs> fs_states_vec)
+                  const std::tuple<std::vector <Inode *>, std::queue<fuse_ino_t>,
+                  struct statvfs>& fs_states_vec)
 {
   auto it = state_pool.find(key);
   if (it != state_pool.end()) {

@@ -292,13 +292,13 @@ size_t Inode::GetPickledSize() {
     // xattrs
     // a header telling how many xattrs there are
     res += sizeof(size_t);
-    for (auto it = m_xattr.begin(); it != m_xattr.end(); ++it) {
+    for (auto & it : m_xattr) {
         // xattr key: <key_size><key_str>
         res += sizeof(size_t);
-        res += it->first.size();
+        res += it.first.size();
         // xattr value: <val_size><val_data>
         res += sizeof(size_t);
-        res += it->second.second;
+        res += it.second.second;
     }
     return res;
 }
@@ -324,11 +324,11 @@ size_t Inode::Pickle(void* &buf) {
     memcpy(ptr, &num_xattrs, sizeof(num_xattrs));
     ptr += sizeof(num_xattrs);
     // pickle xattrs
-    for (auto it = m_xattr.begin(); it != m_xattr.end(); ++it) {
-        size_t keysize = it->first.size();
-        const char *keystr = it->first.c_str();
-        size_t valsize = it->second.second;
-        char *valdata = (char *)it->second.first;
+    for (auto & it : m_xattr) {
+        size_t keysize = it.first.size();
+        const char *keystr = it.first.c_str();
+        size_t valsize = it.second.second;
+        char *valdata = (char *)it.second.first;
         memcpy(ptr, &keysize, sizeof(keysize));
         ptr += sizeof(keysize);
         memcpy(ptr, keystr, keysize);

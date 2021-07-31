@@ -143,7 +143,7 @@ public:
         std::shared_lock<std::shared_mutex> readlk(inodesRwSem);
         try {
             return Inodes.at(ino);
-        } catch (std::out_of_range e) {
+        } catch (std::out_of_range& e) {
             return nullptr;
         }
     }

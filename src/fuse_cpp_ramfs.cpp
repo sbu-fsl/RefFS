@@ -107,10 +107,8 @@ FuseRamFs::~FuseRamFs()
 
 static void free_inodes(std::vector<Inode *> &table)
 {
-    for (size_t i = 0; i < table.size(); ++i) {
-        if (table[i]) {
-            delete table[i];
-        }
+    for (auto & i : table) {
+            delete i;
     }
     table.clear();
 }
@@ -130,17 +128,17 @@ int FuseRamFs::checkpoint(uint64_t key)
     SpecialInode *special_inode_old;
     SymLink *symlink_inode_old;
 
-    for (unsigned i = 0; i < Inodes.size(); i++)
+    for (auto & i : Inodes)
     {
-        if (Inodes[i] == nullptr){
+        if (i == nullptr){
             copied_files.push_back(nullptr);
             continue;
         }
 
-        inode_mode = Inodes[i]->GetMode();
+        inode_mode = i->GetMode();
         if (S_ISREG(inode_mode)){
-            file_inode_old = dynamic_cast<File *>(Inodes[i]);
-            if (file_inode_old == NULL){
+            file_inode_old = dynamic_cast<File *>(i);
+            if (file_inode_old == nullptr){
                 ret = -EBADF;
                 goto err;
             }
@@ -149,33 +147,33 @@ int FuseRamFs::checkpoint(uint64_t key)
             copied_files.push_back((Inode*) file_inode_copy);
 
         } else if (S_ISDIR(inode_mode)) {
-            dir_inode_old = dynamic_cast<Directory *>(Inodes[i]);
-            if (dir_inode_old == NULL){
+            dir_inode_old = dynamic_cast<Directory *>(i);
+            if (dir_inode_old == nullptr){
                 ret = -EBADF;
                 goto err;
             }
 
-            Directory *dir_copy = new Directory(*dir_inode_old);
+            auto *dir_copy = new Directory(*dir_inode_old);
             copied_files.push_back((Inode*) dir_copy);
 
         } else if (S_ISLNK(inode_mode)) {
-            symlink_inode_old = dynamic_cast<SymLink *>(Inodes[i]);
-            if (symlink_inode_old == NULL){
+            symlink_inode_old = dynamic_cast<SymLink *>(i);
+            if (symlink_inode_old == nullptr){
                 ret = -EBADF;
                 goto err;
             }
 
-            SymLink *symlink_inode_copy = new SymLink(*symlink_inode_old);
+            auto *symlink_inode_copy = new SymLink(*symlink_inode_old);
             copied_files.push_back((Inode*) symlink_inode_copy);
 
         } else {
-            special_inode_old = dynamic_cast<SpecialInode *>(Inodes[i]);
-            if (special_inode_old == NULL){
+            special_inode_old = dynamic_cast<SpecialInode *>(i);
+            if (special_inode_old == nullptr){
                 ret = -EBADF;
                 goto err;
             }
 
-            SpecialInode *special_inode_copy = new SpecialInode(*special_inode_old);
+            auto *special_inode_copy = new SpecialInode(*special_inode_old);
             copied_files.push_back((Inode*) special_inode_copy);
         }    
     }
@@ -200,22 +198,22 @@ err:
 
 void FuseRamFs::invalidate_kernel_states()
 {
-    for (std::vector<Inode *>::iterator it = Inodes.begin(); it != Inodes.end(); ++it){
-        if ((*it) == nullptr){
+    for (auto & it : Inodes){
+        if (it == nullptr){
             continue;
         }
         /* Invalidate possible kernel inode cache */
         // if m_markedForDeletion is false (the inode exists and is not marked as deleted)
-        if (!(*it)->m_markedForDeletion){
-            fuse_lowlevel_notify_inval_inode(ch, (*it)->GetIno(), 0, 0);
+        if (!it->m_markedForDeletion){
+            fuse_lowlevel_notify_inval_inode(ch, it->GetIno(), 0, 0);
         }
         /* Invalidate potential d-cache */
-        if(S_ISDIR((*it)->GetMode())){
-            Directory *parent_dir = dynamic_cast<Directory *>(*it);
+        if(S_ISDIR(it->GetMode())){
+            auto *parent_dir = dynamic_cast<Directory *>(it);
             /* If parent_dir has child dir*/
-            for (auto it_child = parent_dir->m_children.begin(); it_child != parent_dir->m_children.end(); ++it_child){
-                if (it_child->second > 0 && it_child->first != "." && it_child->first != ".."){
-                    fuse_lowlevel_notify_inval_entry(ch, (*it)->GetIno(), (it_child->first).c_str(), (it_child->first).size());
+            for (auto & it_child : parent_dir->m_children){
+                if (it_child.second > 0 && it_child.first != "." && it_child.first != ".."){
+                    fuse_lowlevel_notify_inval_entry(ch, it->GetIno(), (it_child.first).c_str(), (it_child.first).size());
                 }
             }
         }
@@ -224,7 +222,7 @@ void FuseRamFs::invalidate_kernel_states()
 
 
 void FuseRamFs::check_restored_inode_size(){
-    for (std::vector<Inode *>::iterator it = Inodes.begin() ; it != Inodes.end(); ++it){
+    for (auto it = Inodes.begin() ; it != Inodes.end(); ++it){
         std::cout << "Order: " << std::distance(Inodes.begin(), it) << " - Inode Size: " 
             << (*it)->m_fuseEntryParam.attr.st_size << std::endl;
     }
@@ -273,44 +271,44 @@ int FuseRamFs::restore(uint64_t key)
     SpecialInode *special_inode_stored;
     SymLink *symlink_inode_stored;
 
-    for (unsigned i = 0; i < stored_files.size(); i++)
+    for (auto & stored_file : stored_files)
     {
-        if (stored_files[i] == nullptr){
+        if (stored_file == nullptr){
             newfiles.push_back(nullptr);
             continue;
         }
-        inode_mode = stored_files[i]->GetMode();
+        inode_mode = stored_file->GetMode();
         if (S_ISREG(inode_mode)){
-            file_inode_stored = dynamic_cast<File *>(stored_files[i]);
-            if (file_inode_stored == NULL){
+            file_inode_stored = dynamic_cast<File *>(stored_file);
+            if (file_inode_stored == nullptr){
                 ret = -EBADF;
                 goto err;
             }
             File *file_new = new File(* file_inode_stored);
             newfiles.push_back((Inode*) file_new);
         } else if (S_ISDIR(inode_mode)) {
-            dir_inode_stored = dynamic_cast<Directory *>(stored_files[i]);
-            if (dir_inode_stored == NULL){
+            dir_inode_stored = dynamic_cast<Directory *>(stored_file);
+            if (dir_inode_stored == nullptr){
                 ret = -EBADF;
                 goto err;
             }
-            Directory *dir_new = new Directory(*dir_inode_stored);
+            auto *dir_new = new Directory(*dir_inode_stored);
             newfiles.push_back((Inode*) dir_new);            
         } else if (S_ISLNK(inode_mode)){
-            symlink_inode_stored = dynamic_cast<SymLink *>(stored_files[i]);
-            if (symlink_inode_stored == NULL){
+            symlink_inode_stored = dynamic_cast<SymLink *>(stored_file);
+            if (symlink_inode_stored == nullptr){
                 ret = -EBADF;
                 goto err;
             }
-            SymLink *symlink_new = new SymLink(*symlink_inode_stored);
+            auto *symlink_new = new SymLink(*symlink_inode_stored);
             newfiles.push_back((Inode*) symlink_new);
         } else {
-            special_inode_stored = dynamic_cast<SpecialInode *>(stored_files[i]);
-            if (special_inode_stored == NULL){
+            special_inode_stored = dynamic_cast<SpecialInode *>(stored_file);
+            if (special_inode_stored == nullptr){
                 ret = -EBADF;
                 goto err;
             }
-            SpecialInode *special_inode_new = new SpecialInode(*special_inode_stored);
+            auto *special_inode_new = new SpecialInode(*special_inode_stored);
             newfiles.push_back((Inode*) special_inode_new);
         }
     }
@@ -365,7 +363,7 @@ void FuseRamFs::FuseIoctl(fuse_req_t req, fuse_ino_t ino, int cmd, void *arg,
             break;
     }
     if (ret == 0) {
-        fuse_reply_ioctl(req, 0, NULL, 0);
+        fuse_reply_ioctl(req, 0, nullptr, 0);
     } else {
         fuse_reply_err(req, -ret);
     }
@@ -405,7 +403,7 @@ void FuseRamFs::FuseInit(void *userdata, struct fuse_conn_info *conn)
     inode_p = new SpecialInode(SPECIAL_INODE_TYPE_NO_BLOCK);
     RegisterInode(inode_p, 0, 0, gid, uid);
     
-    Directory *root = new Directory();
+    auto *root = new Directory();
     
     // I think that that the root directory should have a hardlink count of 2.
     // This is what I believe I've surmised from reading around.
@@ -449,8 +447,8 @@ void FuseRamFs::FuseLookup(fuse_req_t req, fuse_ino_t parent, const char *name)
         return;
     }
 
-    Directory *dir = dynamic_cast<Directory *>(parentInode);
-    if (dir == NULL) {
+    auto *dir = dynamic_cast<Directory *>(parentInode);
+    if (dir == nullptr) {
         // The parent wasn't a directory. It can't have any children.
         fuse_reply_err(req, ENOTDIR);
         return;
@@ -554,7 +552,7 @@ void FuseRamFs::FuseOpenDir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_inf
     }   
     // You can't open a file with 'opendir'. Check for this.
     File *file = dynamic_cast<File *>(inode);
-    if (file != NULL) {
+    if (file != nullptr) {
         fuse_reply_err(req, ENOTDIR);
         return;
     }
@@ -585,7 +583,7 @@ void FuseRamFs::FuseReleaseDir(fuse_req_t req, fuse_ino_t ino, struct fuse_file_
     }   
     // You can't close a file with 'closedir'. Check for this.
     File *file = dynamic_cast<File *>(inode);
-    if (file != NULL) {
+    if (file != nullptr) {
         fuse_reply_err(req, ENOTDIR);
         return;
     }
@@ -620,8 +618,8 @@ void FuseRamFs::FuseReadDir(fuse_req_t req, fuse_ino_t ino, size_t size,
         return;
     }
 
-    Directory *dir = dynamic_cast<Directory *>(inode);
-    if (dir == NULL) {
+    auto *dir = dynamic_cast<Directory *>(inode);
+    if (dir == nullptr) {
         fuse_reply_err(req, ENOTDIR);
         return;
     }
@@ -630,7 +628,7 @@ void FuseRamFs::FuseReadDir(fuse_req_t req, fuse_ino_t ino, size_t size,
     try {
         ctx = dir->PrepareReaddir(off);
     } catch (std::out_of_range &e) {
-        fuse_reply_buf(req, NULL, 0);
+        fuse_reply_buf(req, nullptr, 0);
         return;
     }
     
@@ -649,13 +647,13 @@ void FuseRamFs::FuseReadDir(fuse_req_t req, fuse_ino_t ino, size_t size,
     // This is why we access the children with an iterator (instead of using
     // some sort of index).
     
-    struct stat stbuf;
+    struct stat stbuf{};
     memset(&stbuf, 0, sizeof(stbuf));
     
     // Pick the lesser of the max response size or our max size.
     size_t bufSize = FuseRamFs::kReadDirBufSize < size ? FuseRamFs::kReadDirBufSize : size;
     char *buf = (char *) malloc(bufSize);
-    if (buf == NULL) {
+    if (buf == nullptr) {
         fuse_reply_err(req, ENOMEM);
     }
 
@@ -717,8 +715,8 @@ void FuseRamFs::FuseOpen(fuse_req_t req, fuse_ino_t ino, struct fuse_file_info *
     }
 
     // You can't open a dir with 'open'. Check for this.
-    Directory *dir = dynamic_cast<Directory *>(inode);
-    if (dir != NULL) {
+    auto *dir = dynamic_cast<Directory *>(inode);
+    if (dir != nullptr) {
         fuse_reply_err(req, EISDIR);
         return;
     }
@@ -743,8 +741,8 @@ void FuseRamFs::FuseRelease(fuse_req_t req, fuse_ino_t ino, struct fuse_file_inf
     }
 
     // You can't release a dir with 'close'. Check for this.
-    Directory *dir = dynamic_cast<Directory *>(inode_p);
-    if (dir != NULL) {
+    auto *dir = dynamic_cast<Directory *>(inode_p);
+    if (dir != nullptr) {
         fuse_reply_err(req, EISDIR);
         return;
     }
@@ -778,8 +776,8 @@ void FuseRamFs::FuseFsyncDir(fuse_req_t req, fuse_ino_t ino, int datasync, struc
     }
     
     // You can only sync a dir with 'fsyncdir'. Check for this.
-    Directory *dir_p = dynamic_cast<Directory *>(inode_p);
-    if (dir_p == NULL) {
+    auto *dir_p = dynamic_cast<Directory *>(inode_p);
+    if (dir_p == nullptr) {
         fuse_reply_err(req, ENOTDIR);
         return;
     }
@@ -799,8 +797,8 @@ void FuseRamFs::FuseMknod(fuse_req_t req, fuse_ino_t parent, const char *name,
     }
 
     // You can only make something inside a directory
-    Directory *parentDir_p = dynamic_cast<Directory *>(parentInode);
-    if (parentDir_p == NULL) {
+    auto *parentDir_p = dynamic_cast<Directory *>(parentInode);
+    if (parentDir_p == nullptr) {
         fuse_reply_err(req, ENOTDIR);
         return;
     }
@@ -887,7 +885,7 @@ long FuseRamFs::do_create_node(Directory *parent, const char *name, mode_t mode,
     /* Special treatment for directories */
     if (S_ISDIR(mode)) {
         /* Initialize the new directory: Add '.' and '..' */
-        Directory *dir_p = dynamic_cast<Directory *>(new_node);
+        auto *dir_p = dynamic_cast<Directory *>(new_node);
         ret = dir_p->AddChild(string("."), ino);
         ret = dir_p->AddChild(string(".."), parent->GetIno());
     }
@@ -921,7 +919,7 @@ void FuseRamFs::FuseMkdir(fuse_req_t req, fuse_ino_t parent, const char *name, m
     }
 
     // You can only make something inside a directory
-    Directory *parentDir_p = dynamic_cast<Directory *>(parentInode);
+    auto *parentDir_p = dynamic_cast<Directory *>(parentInode);
     if (parentDir_p == nullptr) {
         fuse_reply_err(req, ENOTDIR);
         return;
@@ -964,8 +962,8 @@ void FuseRamFs::FuseUnlink(fuse_req_t req, fuse_ino_t parent, const char *name)
     }
 
     // You can only delete something inside a directory
-    Directory *parentDir_p = dynamic_cast<Directory *>(parentInode);
-    if (parentDir_p == NULL) {
+    auto *parentDir_p = dynamic_cast<Directory *>(parentInode);
+    if (parentDir_p == nullptr) {
         fuse_reply_err(req, ENOTDIR);
         return;
     }
@@ -1007,8 +1005,8 @@ void FuseRamFs::FuseRmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
     }
 
     // You can only delete something inside a directory
-    Directory *parentDir_p = dynamic_cast<Directory *>(parentInode);
-    if (parentDir_p == NULL) {
+    auto *parentDir_p = dynamic_cast<Directory *>(parentInode);
+    if (parentDir_p == nullptr) {
         fuse_reply_err(req, ENOTDIR);
         return;
     }
@@ -1038,8 +1036,8 @@ void FuseRamFs::FuseRmdir(fuse_req_t req, fuse_ino_t parent, const char *name)
         return;
     }
 
-    Directory *dir_p = dynamic_cast<Directory *>(inode_p);
-    if (dir_p == NULL) {
+    auto *dir_p = dynamic_cast<Directory *>(inode_p);
+    if (dir_p == nullptr) {
         // Someone tried to rmdir on something that wasn't a directory.
         fuse_reply_err(req, ENOTDIR);
         return;
@@ -1105,7 +1103,7 @@ void FuseRamFs::FuseWrite(fuse_req_t req, fuse_ino_t ino, const char *buf, size_
 {
     std::shared_lock<std::shared_mutex> lk(crMutex);
     // TODO: Fuse seems to have problems writing with a null (buf) buffer.
-    if (buf == NULL) {
+    if (buf == nullptr) {
         fuse_reply_err(req, EINVAL);
         return;
     }
@@ -1162,14 +1160,14 @@ void FuseRamFs::FuseRename(fuse_req_t req, fuse_ino_t parent, const char *name, 
     }
 
     // You can only rename something inside a directory
-    Directory *parentDir = dynamic_cast<Directory *>(parentInode);
-    if (parentDir == NULL) {
+    auto *parentDir = dynamic_cast<Directory *>(parentInode);
+    if (parentDir == nullptr) {
         fuse_reply_err(req, ENOTDIR);
         return;
     }
 
-    Directory *newParentDir = dynamic_cast<Directory *>(newParentInode);
-    if (newParentDir == NULL) {
+    auto *newParentDir = dynamic_cast<Directory *>(newParentInode);
+    if (newParentDir == nullptr) {
         fuse_reply_err(req, ENOTDIR);
         return;
     }
@@ -1224,7 +1222,7 @@ void FuseRamFs::FuseRename(fuse_req_t req, fuse_ino_t parent, const char *name, 
         }
         /* If dest is a non-empty directory, return ENOTEMPTY */
         if (S_ISDIR(existingInode->GetMode())) {
-            Directory *existingDir = dynamic_cast<Directory *>(existingInode);
+            auto *existingDir = dynamic_cast<Directory *>(existingInode);
             /* If the mode indicates a directory but it's not,
                something bad might have happened */
             assert(existingDir);
@@ -1286,8 +1284,8 @@ void FuseRamFs::FuseLink(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent, c
 
     // The new parent must be a directory. TODO: Do we need this check? Will FUSE
     // ever give us a parent that isn't a dir? Test this.
-    Directory *parentDir = dynamic_cast<Directory *>(parent);
-    if (parentDir == NULL) {
+    auto *parentDir = dynamic_cast<Directory *>(parent);
+    if (parentDir == nullptr) {
         fuse_reply_err(req, ENOTDIR);
         return;
     }
@@ -1325,8 +1323,8 @@ void FuseRamFs::FuseSymlink(fuse_req_t req, const char *link, fuse_ino_t parent,
     }
 
     // You can only make something inside a directory
-    Directory *dir = dynamic_cast<Directory *>(parent_p);
-    if (dir == NULL) {
+    auto *dir = dynamic_cast<Directory *>(parent_p);
+    if (dir == nullptr) {
         fuse_reply_err(req, ENOTDIR);
         return;
     }
@@ -1372,8 +1370,8 @@ void FuseRamFs::FuseReadLink(fuse_req_t req, fuse_ino_t ino)
     }
 
     // You can only readlink on a symlink
-    SymLink *link_p = dynamic_cast<SymLink *>(inode_p);
-    if (link_p == NULL) {
+    auto *link_p = dynamic_cast<SymLink *>(inode_p);
+    if (link_p == nullptr) {
         fuse_reply_err(req, EINVAL);
         return;
     }
@@ -1390,7 +1388,7 @@ void FuseRamFs::FuseReadLink(fuse_req_t req, fuse_ino_t ino)
 void FuseRamFs::FuseStatfs(fuse_req_t req, fuse_ino_t ino)
 {
     std::shared_lock<std::shared_mutex> lk(crMutex);
-    struct statvfs info;
+    struct statvfs info{};
     FuseRamFs::FsStat(&info);
     fuse_reply_statfs(req, &info);
 }
@@ -1484,8 +1482,8 @@ void FuseRamFs::FuseCreate(fuse_req_t req, fuse_ino_t parent, const char *name, 
         fuse_reply_err(req, ENOENT);
         return;
     }
-    Directory *parentDir_p = dynamic_cast<Directory *>(parent_p);
-    if (parentDir_p == NULL) {
+    auto *parentDir_p = dynamic_cast<Directory *>(parent_p);
+    if (parentDir_p == nullptr) {
         // The parent wasn't a directory. It can't have any children.
         fuse_reply_err(req, ENOTDIR);
         return;

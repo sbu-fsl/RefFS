@@ -171,18 +171,18 @@ Directory::ReadDirCtx* Directory::PrepareReaddir(off_t cookie) {
     while (readdirStates.find(cookie) != readdirStates.end()) {
         cookie = rand();
     }
-    ReadDirCtx *newctx = new ReadDirCtx(cookie, copiedChildren);
+    auto *newctx = new ReadDirCtx(cookie, copiedChildren);
     readdirStates.insert({cookie, newctx});
     return newctx;
 }
 
 bool Directory::IsEmpty() {
     std::shared_lock<std::shared_mutex> lk(childrenRwSem);
-    for (auto it = m_children.begin(); it != m_children.end(); ++it) {
-        if (it->first == "." || it->first == "..") {
+    for (auto & it : m_children) {
+        if (it.first == "." || it.first == "..") {
             continue;
         }
-        Inode *entry = FuseRamFs::GetInode(it->second);
+        Inode *entry = FuseRamFs::GetInode(it.second);
         /* Not empty if it has at least one undeleted inode */
         if (entry && !entry->HasNoLinks()) {
             return false;
@@ -196,13 +196,13 @@ size_t Directory::GetPickledSize() {
     // the number of children
     res += sizeof(size_t);
     // iterate children
-    for (auto it = m_children.begin(); it != m_children.end(); ++it) {
+    for (auto & it : m_children) {
         // inode number
         res += sizeof(fuse_ino_t);
         // name length field
         res += sizeof(size_t);
         // size of file name
-        res += it->first.size();
+        res += it.first.size();
     }
     return res;
 }
@@ -221,17 +221,17 @@ size_t Directory::Pickle(void* &buf) {
     memcpy(ptr, &nchildren, sizeof(nchildren));
     ptr += sizeof(nchildren);
     // iterate children and store
-    for (auto it = m_children.begin(); it != m_children.end(); ++it) {
+    for (auto & it : m_children) {
         // store inode number
-        fuse_ino_t ino = it->second;
+        fuse_ino_t ino = it.second;
         memcpy(ptr, &ino, sizeof(ino));
         ptr += sizeof(ino);
         // store the length of the file name
-        size_t namelen = it->first.size();
+        size_t namelen = it.first.size();
         memcpy(ptr, &namelen, sizeof(namelen));
         ptr += sizeof(namelen);
         // store the name string
-        memcpy(ptr, it->first.c_str(), namelen);
+        memcpy(ptr, it.first.c_str(), namelen);
         ptr += namelen;
     }
     return ptr - (char *)buf;

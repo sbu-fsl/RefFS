@@ -50,14 +50,14 @@ int main(int argc, const char * argv[]) {
     
     if (options.subtype) {
         mountpoint = options.mountpoint;
-        if (mountpoint == NULL) {
+        if (mountpoint == nullptr) {
             cerr << "USAGE: fuse-cpp-ramfs MOUNTPOINT" << endl;
-        } else if ((ch = fuse_mount(mountpoint, &args)) != NULL) {
+        } else if ((ch = fuse_mount(mountpoint, &args)) != nullptr) {
             struct fuse_session *se;
             // The FUSE options come from our core code.
-            se = fuse_lowlevel_new(&args, &(core.FuseOps),
-                                   sizeof(core.FuseOps), NULL);
-            if (se != NULL) {
+            se = fuse_lowlevel_new(&args, &(FuseRamFs::FuseOps),
+                                   sizeof(FuseRamFs::FuseOps), nullptr);
+            if (se != nullptr) {
                 fuse_daemonize(options.deamonize == 0);
                 if (fuse_set_signal_handlers(se) != -1) {
                     fuse_session_add_chan(se, ch);

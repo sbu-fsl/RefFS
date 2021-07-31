@@ -9,7 +9,7 @@
 
 typedef std::tuple<std::vector <Inode *>, std::queue<fuse_ino_t>, struct statvfs> verifs2_state;
 
-int insert_state(uint64_t key, verifs2_state fs_states_vec);
+int insert_state(uint64_t key, const verifs2_state& fs_states_vec);
 verifs2_state find_state(uint64_t key);
 int remove_state(uint64_t key);
 
