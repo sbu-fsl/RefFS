@@ -18,7 +18,7 @@ load_path = '../build/load'
 '''*You need to comment out (rm -rf "$DIR") in racer script for this to work correctly'''
 racer_script_path = 'racer/racer.sh'
 '''range format: [a,b)'''
-racer_duration = (3, 6)
+racer_duration = (2, 4)
 racer_threads = (1, 2)
 num_test_attempts = (1, 2)
 #
@@ -64,6 +64,7 @@ def pickle_save_signature():
 def load_verify_signature(i):
     subprocess.run([load_path, path_to_fs, 'pickle_tmp{}'.format(i)])
     signature = config_list[i]
+    time.sleep(1)
     new_signature = get_fs_signature()
     if new_signature == signature:
         print('loaded pickle file at index {} passed verification, signature: {}'.format(i, signature))
@@ -113,7 +114,7 @@ def perform_test():
 
         pickle_save_signature()
 
-        time.sleep(3)
+        time.sleep(1)
 
         p = subprocess.Popen([racer_script_path,
                               path_to_fs,
@@ -145,6 +146,8 @@ except Exception as err:
         with suppress(Exception):
             os.kill(pid, signal.SIGINT)  # or SIGINT to CTRL_C_EVENT for Windows
     pass
+
+input()
 
 clean_exit()
 

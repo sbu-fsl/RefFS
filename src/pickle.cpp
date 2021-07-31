@@ -326,16 +326,16 @@ ssize_t load_file_system(const void *data, std::vector<Inode *>& inodes,
                 res = file->Load(ptr2);
                 inodes.push_back(file);
             } else if (S_ISDIR(iinfo.mode)) {
-                Directory *dir = new Directory();
+                auto *dir = new Directory();
                 res = dir->Load(ptr2);
                 inodes.push_back(dir);
             } else if (S_ISLNK(iinfo.mode)) {
-                SymLink *link = new SymLink();
+                auto *link = new SymLink();
                 res = link->Load(ptr2);
                 inodes.push_back(link);
             } else if (S_ISCHR(iinfo.mode) || S_ISBLK(iinfo.mode) ||
                 S_ISSOCK(iinfo.mode) || S_ISFIFO(iinfo.mode) || iinfo.mode == 0) {
-                SpecialInode *special = new SpecialInode();
+                auto *special = new SpecialInode();
                 res = special->Load(ptr2);
                 inodes.push_back(special);
             } else {
@@ -365,7 +365,7 @@ ssize_t load_file_system(const void *data, std::vector<Inode *>& inodes,
 }
 
 static size_t get_fsize(int fd) {
-    struct stat info;
+    struct stat info{};
     int res = fstat(fd, &info);
     if (res < 0) {
         throw pickle_error(errno, __func__, __LINE__);
