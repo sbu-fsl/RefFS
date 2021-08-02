@@ -10,7 +10,7 @@ import signal
 from contextlib import suppress
 
 # config
-fs_name = 'fuse-cpp-ramfs'
+fs_exec = 'fuse-cpp-ramfs'  # bin program or path, ex: ../../verifs1/crmfs
 path_to_fs = '{}/mnt/fuse-cpp-ramfs'.format(os.getcwd())  # absolute path only
 absfs_path = '../../fs-state/absfs'
 pkl_path = '../build/pkl'
@@ -18,8 +18,8 @@ load_path = '../build/load'
 '''*You need to comment out (rm -rf "$DIR") in racer script for this to work correctly'''
 racer_script_path = 'racer/racer.sh'
 '''range format: [a,b)'''
-racer_duration = (2, 4)
-racer_threads = (1, 2)
+racer_duration = (3, 7)
+racer_threads = (3, 5)
 num_test_attempts = (1, 2)
 #
 
@@ -112,16 +112,11 @@ def perform_test():
 
         p.wait()
 
+        input('make sure racer threads are terminated and press any button to continue:')
+
         pickle_save_signature()
 
-        time.sleep(1)
-
-        p = subprocess.Popen([racer_script_path,
-                              path_to_fs,
-                              str(get_random_in_range(racer_duration)),
-                              str(get_random_in_range(racer_threads))])
-
-        p.wait()
+        input('press any button to load the pickled file:')
 
         load_verify_signature(size - 1)
 
@@ -132,22 +127,24 @@ make_sure_path_exists(path_to_fs)
 
 clean_files('', path_to_fs)
 
-child = subprocess.Popen([fs_name,
+child = subprocess.Popen([fs_exec,
                           path_to_fs])
 
 time.sleep(1)
 
 try:
     perform_test()
+    input()
+except KeyboardInterrupt:
+    pass
 except Exception as err:
     print(err)
     if p is not None:
         pid = p.pid
         with suppress(Exception):
             os.kill(pid, signal.SIGINT)  # or SIGINT to CTRL_C_EVENT for Windows
+    input()
     pass
-
-input()
 
 clean_exit()
 

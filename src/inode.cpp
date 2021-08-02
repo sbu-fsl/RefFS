@@ -81,30 +81,31 @@ int Inode::ReplySetAttr(fuse_req_t req, struct stat *attr, int to_set) {
         m_fuseEntryParam.attr.st_flags = attr->st_flags;
     }
 #endif /* __APPLE__ */
-    
+
     // TODO: What do we do if this fails? Do we care? Log the event?
 #ifdef __APPLE__
     clock_gettime(CLOCK_REALTIME, &(m_fuseEntryParam.attr.st_ctimespec));
 #else
     clock_gettime(CLOCK_REALTIME, &(m_fuseEntryParam.attr.st_ctim));
 #endif
-    
+
     return fuse_reply_attr(req, &(m_fuseEntryParam.attr), 1.0);
 }
 
 void Inode::Forget(fuse_req_t req, unsigned long nlookup) {
     m_nlookup -= nlookup;
-    
+
     fuse_reply_none(req);
 }
 
-int Inode::SetXAttrAndReply(fuse_req_t req, const string &name, const void *value, size_t size, int flags, uint32_t position) {
+int Inode::SetXAttrAndReply(fuse_req_t req, const string &name, const void *value, size_t size, int flags,
+                            uint32_t position) {
     std::unique_lock<std::shared_mutex> lk(xattrRwSem);
     if (m_xattr.find(name) == m_xattr.end()) {
         if (flags & XATTR_CREATE) {
             return fuse_reply_err(req, EEXIST);
         }
-        
+
     } else {
         if (flags & XATTR_REPLACE) {
 #ifdef __APPLE__
@@ -114,19 +115,19 @@ int Inode::SetXAttrAndReply(fuse_req_t req, const string &name, const void *valu
 #endif
         }
     }
-    
+
     // TODO: What about overflow with size + position?
     size_t newExtent = size + position;
-    
+
     // Expand the space for the value if required.
     if (m_xattr[name].second < newExtent) {
         void *newBuf = realloc(m_xattr[name].first, newExtent);
         if (newBuf == NULL) {
             return fuse_reply_err(req, E2BIG);
         }
-        
+
         m_xattr[name].first = newBuf;
-        
+
         // TODO: How does the user truncate the value? I.e., if they want to replace part, they'll send in
         // a position and a small size, right? If they want to make the whole thing shorter, then what?
         m_xattr[name].second = newExtent;
@@ -134,7 +135,7 @@ int Inode::SetXAttrAndReply(fuse_req_t req, const string &name, const void *valu
 
     // Copy the data.
     memcpy((char *) m_xattr[name].first + position, value, size);
-    
+
     return fuse_reply_err(req, 0);
 }
 
@@ -147,29 +148,29 @@ int Inode::GetXAttrAndReply(fuse_req_t req, const string &name, size_t size, uin
         return fuse_reply_err(req, ENODATA);
 #endif
     }
-    
+
     // The requestor wanted the size. TODO: How does position figure into this?
     if (size == 0) {
         return fuse_reply_xattr(req, m_xattr[name].second);
     }
-    
+
     // TODO: What about overflow with size + position?
     size_t newExtent = size + position;
-    
+
     // TODO: Is this the case where "the size is to small for the value"?
     if (m_xattr[name].second < newExtent) {
         return fuse_reply_err(req, ERANGE);
     }
-    
+
     // TODO: It's fine for someone to just read part of a value, right (i.e. size is less than m_xattr[name].second)?
     return fuse_reply_buf(req, (char *) m_xattr[name].first + position, size);
 }
 
 int Inode::ListXAttrAndReply(fuse_req_t req, size_t size) {
-    
+
     size_t listSize = 0;
     std::shared_lock<std::shared_mutex> lk(xattrRwSem);
-    for(map<string, pair<void *, size_t> >::iterator it = m_xattr.begin(); it != m_xattr.end(); it++) {
+    for (map<string, pair<void *, size_t> >::iterator it = m_xattr.begin(); it != m_xattr.end(); it++) {
         listSize += (it->first.size() + 1);
     }
 
@@ -177,20 +178,20 @@ int Inode::ListXAttrAndReply(fuse_req_t req, size_t size) {
     if (size == 0) {
         return fuse_reply_xattr(req, listSize);
     }
-    
+
     // "If the size is too small for the list, the ERANGE error should be sent"
     if (size < listSize) {
         return fuse_reply_err(req, ERANGE);
     }
-    
+
     // TODO: Is EIO really the best error to return if we ran out of memory?
     void *buf = malloc(listSize);
     if (buf == NULL) {
         return fuse_reply_err(req, EIO);
     }
-    
+
     size_t position = 0;
-    for(map<string, pair<void *, size_t> >::iterator it = m_xattr.begin(); it != m_xattr.end(); it++) {
+    for (map<string, pair<void *, size_t> >::iterator it = m_xattr.begin(); it != m_xattr.end(); it++) {
         // Copy the name as well as the null termination character.
         memcpy((char *) buf + position, it->first.c_str(), it->first.size() + 1);
         position += (it->first.size() + 1);
@@ -198,7 +199,7 @@ int Inode::ListXAttrAndReply(fuse_req_t req, size_t size) {
 
     int retval = fuse_reply_buf(req, (char *) buf, position);
     free(buf);
-    
+
     return retval;
 }
 
@@ -212,9 +213,9 @@ int Inode::RemoveXAttrAndReply(fuse_req_t req, const string &name) {
         return fuse_reply_err(req, ENODATA);
 #endif
     }
-    
+
     m_xattr.erase(it);
-    
+
     return fuse_reply_err(req, 0);
 }
 
@@ -223,37 +224,37 @@ int Inode::ReplyAccess(fuse_req_t req, int mask, gid_t gid, uid_t uid) {
     if (mask == F_OK) {
         return fuse_reply_err(req, 0);
     }
-    
+
     std::shared_lock<std::shared_mutex> lk(entryRwSem);
     // Check other
     if ((m_fuseEntryParam.attr.st_mode & mask) == mask) {
         return fuse_reply_err(req, 0);
     }
     mask <<= 3;
-    
+
     // Check group. TODO: What about other groups the user is in?
     if ((m_fuseEntryParam.attr.st_mode & mask) == mask) {
         // Go ahead if the user's main group is the same as the file's
         if (gid == m_fuseEntryParam.attr.st_gid) {
             return fuse_reply_err(req, 0);
         }
-        
+
         // Now check the user's other groups. TODO: Where is this function?! not on this version of FUSE?
         // int numGroups = fuse_req_getgroups(req, 0, NULL);
-        
+
     }
     mask <<= 3;
-    
+
     // Check owner.
     if ((uid == m_fuseEntryParam.attr.st_uid) && (m_fuseEntryParam.attr.st_mode & mask) == mask) {
         return fuse_reply_err(req, 0);
     }
-    
+
     return fuse_reply_err(req, EACCES);
 }
 
 void Inode::Initialize(fuse_ino_t ino, mode_t mode, nlink_t nlink, gid_t gid, uid_t uid) {
-    
+
     // TODO: Still not sure if I should use m_fuseEntryParam = {}
     memset(&m_fuseEntryParam, 0, sizeof(m_fuseEntryParam));
     m_fuseEntryParam.ino = ino;
@@ -263,15 +264,15 @@ void Inode::Initialize(fuse_ino_t ino, mode_t mode, nlink_t nlink, gid_t gid, ui
     m_fuseEntryParam.attr.st_mode = mode;
     m_fuseEntryParam.attr.st_gid = gid;
     m_fuseEntryParam.attr.st_uid = uid;
-    
+
     // Note this found on the Internet regarding nlink on dirs:
     // "For the root directory it is at least three; /, /., and /... Make a directory /foo and /foo/.. will have the same inode number as /, incrementing st_nlink.
     //
     // Cheers, Ralph."
     m_fuseEntryParam.attr.st_nlink = nlink;
-    
+
     m_fuseEntryParam.attr.st_blksize = Inode::BufBlockSize;
-    
+
     timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
 #ifdef __APPLE__
@@ -292,7 +293,7 @@ size_t Inode::GetPickledSize() {
     // xattrs
     // a header telling how many xattrs there are
     res += sizeof(size_t);
-    for (auto & it : m_xattr) {
+    for (auto &it : m_xattr) {
         // xattr key: <key_size><key_str>
         res += sizeof(size_t);
         res += it.first.size();
@@ -303,15 +304,15 @@ size_t Inode::GetPickledSize() {
     return res;
 }
 
-size_t Inode::Pickle(void* &buf) {
+size_t Inode::Pickle(void *&buf) {
     if (buf == nullptr)
         buf = malloc(GetPickledSize());
     if (buf == nullptr)
         return 0;
-  
-    char *ptr = (char *)buf;
+
+    char *ptr = (char *) buf;
     // bool m_markedForDeletion;
-    *ptr++ = m_markedForDeletion;
+    *ptr++ = m_markedForDeletion ? 1 : 0;
     // std::atomic_ulong m_nlookup;
     unsigned long nlookup = m_nlookup.load();
     memcpy(ptr, &nlookup, sizeof(nlookup));
@@ -324,11 +325,11 @@ size_t Inode::Pickle(void* &buf) {
     memcpy(ptr, &num_xattrs, sizeof(num_xattrs));
     ptr += sizeof(num_xattrs);
     // pickle xattrs
-    for (auto & it : m_xattr) {
+    for (auto &it : m_xattr) {
         size_t keysize = it.first.size();
         const char *keystr = it.first.c_str();
         size_t valsize = it.second.second;
-        char *valdata = (char *)it.second.first;
+        char *valdata = (char *) it.second.first;
         memcpy(ptr, &keysize, sizeof(keysize));
         ptr += sizeof(keysize);
         memcpy(ptr, keystr, keysize);
@@ -338,7 +339,7 @@ size_t Inode::Pickle(void* &buf) {
         memcpy(ptr, valdata, valsize);
         ptr += valsize;
     }
-    return (size_t)(ptr - (char *)buf);
+    return (size_t) (ptr - (char *) buf);
 }
 
 /* Inode pickle format: 
@@ -348,8 +349,8 @@ size_t Inode::Pickle(void* &buf) {
  * --xattr2_valsize--|-------xattr2_valdata-------|--xattr3_keysize--|--xattr3_...--|...
  */
 
-size_t Inode::Load(const void* &buf) {
-    const char *ptr = (const char *)buf;
+size_t Inode::Load(const void *&buf) {
+    const char *ptr = (const char *) buf;
     // bool m_markedForDeletion
     m_markedForDeletion = *ptr++;
     // std::atomic_ulong m_nlookup;
@@ -376,7 +377,7 @@ size_t Inode::Load(const void* &buf) {
         size_t valsize;
         memcpy(&valsize, ptr, sizeof(valsize));
         ptr += sizeof(valsize);
-        char *value = (char *)malloc(valsize);
+        char *value = (char *) malloc(valsize);
         if (value == nullptr)
             goto error;
         memcpy(value, ptr, valsize);
@@ -384,8 +385,8 @@ size_t Inode::Load(const void* &buf) {
         // add to xattrs tree
         m_xattr.insert({key, {value, valsize}});
     }
-    return ptr - (char *)buf;
-error:
+    return ptr - (char *) buf;
+    error:
     ClearXAttrs();
     return 0;
 }

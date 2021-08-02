@@ -26,7 +26,7 @@ public:
                 errnoname(_errno), _errno, func.c_str(), line);
     }
 
-    pickle_error(const pickle_error& other) {
+    pickle_error(const pickle_error &other) {
         _errno = other._errno;
         func = other.func;
         line = other.line;
@@ -75,8 +75,8 @@ static inline size_t write_and_hash(int fd, SHA256_CTX *hashctx,
     return res;
 }
 
-int pickle_file_system(int fd, std::vector<Inode *>& inodes,
-                       std::queue<fuse_ino_t>& pending_delete_inodes,
+int pickle_file_system(int fd, std::vector<Inode *> &inodes,
+                       std::queue<fuse_ino_t> &pending_delete_inodes,
                        struct statvfs &fs_stat, SHA256_CTX *hashctx) {
     /* Remember the current file cursor;
      * if pickling fails, move the cursor here. */
@@ -89,7 +89,7 @@ int pickle_file_system(int fd, std::vector<Inode *>& inodes,
         write_and_hash(fd, hashctx, &num_inodes, sizeof(num_inodes));
         for (size_t i = 0; i < num_inodes; ++i) {
             Inode *inode = inodes[i];
-            struct inode_state iinfo = {0};
+            struct inode_state iinfo = {};
             if (inode == nullptr) {
                 iinfo.exist = false;
                 write_and_hash(fd, hashctx, &iinfo, sizeof(iinfo));
@@ -106,6 +106,8 @@ int pickle_file_system(int fd, std::vector<Inode *>& inodes,
             iinfo.exist = true;
             write_and_hash(fd, hashctx, &iinfo, sizeof(iinfo));
             write_and_hash(fd, hashctx, data, pickled_size);
+
+            free(data);
         }
         // pickle the list of pending delete inodes
         size_t num_pending_delete = pending_delete_inodes.size();
@@ -151,7 +153,7 @@ int pickle_file_system(int fd, std::vector<Inode *>& inodes,
             write_and_hash(fd, hashctx, &stored_m_stbuf, sizeof(stored_m_stbuf));
         }*/
 
-    } catch (const pickle_error& e) {
+    } catch (const pickle_error &e) {
         lseek(fd, fpos, SEEK_SET);
         return -e.get_errno();
     }
@@ -163,7 +165,7 @@ static char *fetch_filepath(const char *cfgpath) {
     if (cfgfd < 0)
         throw pickle_error(errno, __func__, __LINE__);
 
-    char *path = (char *)calloc(PATH_MAX, 1);
+    char *path = (char *) calloc(PATH_MAX, 1);
     if (path == nullptr) {
         close(cfgfd);
         throw pickle_error(ENOMEM, __func__, __LINE__);
@@ -174,9 +176,9 @@ static char *fetch_filepath(const char *cfgpath) {
         close(cfgfd);
         throw pickle_error(errno, __func__, __LINE__);
     }
-    
+
     size_t pathlen = strnlen(path, PATH_MAX);
-    path = (char *)realloc(path, pathlen + 1);
+    path = (char *) realloc(path, pathlen + 1);
     close(cfgfd);
     return path;
 }
@@ -300,10 +302,10 @@ int verify_state_file(int fd) {
  *
  * @return: bytes used
  */
-ssize_t load_file_system(const void *data, std::vector<Inode *>& inodes,
-                     std::queue<fuse_ino_t>& pending_delete_inodes,
-                     struct statvfs &fs_stat) {
-    const char *ptr = (const char *)data;
+ssize_t load_file_system(const void *data, std::vector<Inode *> &inodes,
+                         std::queue<fuse_ino_t> &pending_delete_inodes,
+                         struct statvfs &fs_stat) {
+    const char *ptr = (const char *) data;
     try {
         // load statvfs
         memcpy(&fs_stat, ptr, sizeof(fs_stat));
@@ -320,7 +322,7 @@ ssize_t load_file_system(const void *data, std::vector<Inode *>& inodes,
                 continue;
 
             size_t res;
-            const void *ptr2 = (const void *)ptr;
+            const void *ptr2 = (const void *) ptr;
             if (S_ISREG(iinfo.mode)) {
                 File *file = new File();
                 res = file->Load(ptr2);
@@ -334,7 +336,7 @@ ssize_t load_file_system(const void *data, std::vector<Inode *>& inodes,
                 res = link->Load(ptr2);
                 inodes.push_back(link);
             } else if (S_ISCHR(iinfo.mode) || S_ISBLK(iinfo.mode) ||
-                S_ISSOCK(iinfo.mode) || S_ISFIFO(iinfo.mode) || iinfo.mode == 0) {
+                       S_ISSOCK(iinfo.mode) || S_ISFIFO(iinfo.mode) || iinfo.mode == 0) {
                 auto *special = new SpecialInode();
                 res = special->Load(ptr2);
                 inodes.push_back(special);
@@ -353,15 +355,14 @@ ssize_t load_file_system(const void *data, std::vector<Inode *>& inodes,
         for (size_t i = 0; i < num_pending_delete; ++i) {
             fuse_ino_t ino;
             memcpy(&ino, ptr, sizeof(ino));
-            ptr += sizeof(ino);
             pending_delete_inodes.push(ino);
+            ptr += sizeof(ino);
         }
 
-
-    } catch (const pickle_error& e) {
+    } catch (const pickle_error &e) {
         return -e.get_errno();
     }
-    return ptr - (const char *)data;
+    return ptr - (const char *) data;
 }
 
 static size_t get_fsize(int fd) {
@@ -406,7 +407,7 @@ int FuseRamFs::load_verifs2(void) {
         FuseRamFs::Inodes.clear();
         while (!FuseRamFs::DeletedInodes.empty())
             FuseRamFs::DeletedInodes.pop();
-        char *ptr = (char *)mapped + sizeof(state_file_header);
+        char *ptr = (char *) mapped + sizeof(state_file_header);
         load_file_system(ptr, FuseRamFs::Inodes, FuseRamFs::DeletedInodes,
                          FuseRamFs::m_stbuf);
     } catch (const pickle_error &e) {
@@ -418,6 +419,6 @@ int FuseRamFs::load_verifs2(void) {
         close(fd);
     if (path)
         free(path);
-    
+
     return res;
 }
