@@ -7,6 +7,7 @@ import time
 import errno
 import random
 import signal
+import psutil
 from contextlib import suppress
 
 # config
@@ -18,16 +19,19 @@ load_path = '../build/load'
 '''*You need to comment out (rm -rf "$DIR") in racer script for this to work correctly'''
 racer_script_path = 'racer/racer.sh'
 '''range format: [a,b)'''
-racer_duration = (3, 7)
-racer_threads = (3, 5)
-num_test_attempts = (1, 2)
+racer_duration = (1, 5)
+racer_threads = (3, 7)
+num_test_attempts = (5, 10)
 #
 
 print(sys.platform)
 
 config_list = []
 size = 0
+success_count = 0
 p = None
+child = None
+random_num_attempts = random.randrange(num_test_attempts[0], num_test_attempts[1])
 
 
 def get_random_in_range(range_tpl):
@@ -44,11 +48,18 @@ def make_sure_path_exists(path):
 
 def get_fs_signature():
     p1 = subprocess.Popen([absfs_path, path_to_fs], stdout=subprocess.PIPE)
-    p2 = subprocess.Popen(['awk', 'END{print $NF}'], stdin=p1.stdout, stdout=subprocess.PIPE)
-    signature = p2.communicate()[0]
-    if signature == b'iterating...\n':
-        p1 = subprocess.Popen([absfs_path, path_to_fs], stdout=subprocess.PIPE)
-        raise Exception(p1.communicate()[0])
+    raw_res = p1.communicate()[0]
+    signature = raw_res.rsplit(b' ', 1)[1]
+    while signature == b'iterating...\n':
+        if b'cannot stat' in raw_res:
+            print('encountered false-positive while calculating the signature, retrying in 5 sec...')
+            time.sleep(5)
+            p1 = subprocess.Popen([absfs_path, path_to_fs], stdout=subprocess.PIPE)
+            raw_res = p1.communicate()[0]
+            signature = raw_res.rsplit(b' ', 1)[1]
+            continue
+        else:
+            raise Exception(raw_res)
     return signature
 
 
@@ -62,14 +73,17 @@ def pickle_save_signature():
 
 
 def load_verify_signature(i):
+    global success_count
+
     subprocess.run([load_path, path_to_fs, 'pickle_tmp{}'.format(i)])
     signature = config_list[i]
-    time.sleep(1)
+    time.sleep(3)
     new_signature = get_fs_signature()
     if new_signature == signature:
         print('loaded pickle file at index {} passed verification, signature: {}'.format(i, signature))
+        success_count += 1
     else:
-        raise Exception('signature at index {} has a discrepancy: {} -> {}'.format(i, signature, new_signature))
+        print('signature at index {} has a discrepancy: {} -> {}'.format(i, signature, new_signature))
 
 
 def clean_files(prefix, cwd=None):
@@ -82,7 +96,7 @@ def run(cmd, cwd=path_to_fs):
     subprocess.run(cmd, cwd=cwd)
 
 
-def clean_exit():
+def unmount():
     time.sleep(1)
     # If you unmount too soon, the mountpoint won't be available.
     if sys.platform == 'darwin' or sys.platform == 'linux':
@@ -92,19 +106,35 @@ def clean_exit():
         subprocess.run(['fusermount', '-u',
                         path_to_fs])
 
+
+def clean_exit():
+    unmount()
+
     print('perform cleanup......')
 
     for fl in glob.glob('pickle_tmp*'):
         os.remove(fl)
 
 
+def wait_for_process(name):
+    while name in (i.name() for i in psutil.process_iter()):
+        print('waiting for {} to terminate......'.format(name))
+        time.sleep(5)
+    time.sleep(1)
+
+
 # ===================================================
 
 
 def perform_test():
-    global p
-    for i in range(get_random_in_range(num_test_attempts)):
-        time.sleep(3)
+    global p, child, random_num_attempts
+    for i in range(random_num_attempts):
+        child = subprocess.Popen([fs_exec,
+                                  path_to_fs])
+        time.sleep(1)
+
+        wait_for_process("dd")
+
         p = subprocess.Popen([racer_script_path,
                               path_to_fs,
                               str(get_random_in_range(racer_duration)),
@@ -112,13 +142,25 @@ def perform_test():
 
         p.wait()
 
-        input('make sure racer threads are terminated and press any button to continue:')
+        wait_for_process("dd")
 
         pickle_save_signature()
 
-        input('press any button to load the pickled file:')
+        wait_for_process("dd")
+
+        p = subprocess.Popen([racer_script_path,
+                              path_to_fs,
+                              str(get_random_in_range(racer_duration)),
+                              str(get_random_in_range(racer_threads))])
+
+        p.wait()
+
+        wait_for_process("dd")
 
         load_verify_signature(size - 1)
+
+        time.sleep(1)
+        unmount()
 
 
 # ===================================================
@@ -127,14 +169,9 @@ make_sure_path_exists(path_to_fs)
 
 clean_files('', path_to_fs)
 
-child = subprocess.Popen([fs_exec,
-                          path_to_fs])
-
-time.sleep(1)
-
 try:
     perform_test()
-    input()
+    print("Test Complete,Success: {}/{}\n-----------------------------".format(success_count, random_num_attempts))
 except KeyboardInterrupt:
     pass
 except Exception as err:
