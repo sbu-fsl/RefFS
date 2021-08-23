@@ -244,6 +244,7 @@ size_t Directory::Load(const void* &buf) {
     size_t nchildren;
     memcpy(&nchildren, ptr, sizeof(nchildren));
     ptr += sizeof(nchildren);
+    m_children.clear();
     // iterate the list and load the children
     for (size_t i = 0; i < nchildren; ++i) {
         // load inode number

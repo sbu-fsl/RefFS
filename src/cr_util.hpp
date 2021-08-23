@@ -7,11 +7,17 @@
 #include "special_inode.hpp"
 #include "symlink.hpp"
 
-typedef std::tuple<std::vector <Inode *>, std::queue<fuse_ino_t>, struct statvfs> verifs2_state;
+typedef std::tuple<std::vector<Inode *>, std::queue<fuse_ino_t>, struct statvfs> verifs2_state;
 
-int insert_state(uint64_t key, const verifs2_state& fs_states_vec);
+int insert_state(uint64_t key, const verifs2_state &fs_states_vec);
+
 verifs2_state find_state(uint64_t key);
+
 int remove_state(uint64_t key);
+
+std::unordered_map<uint64_t, verifs2_state> get_state_pool();
+
+void clear_states();
 
 #ifdef DUMP_TESTING
 void dump_File(File* file);

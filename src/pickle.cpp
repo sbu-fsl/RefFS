@@ -122,20 +122,41 @@ int pickle_file_system(int fd, std::vector<Inode *> &inodes,
             pending_delete_inodes.push(ino);
         }
 
-        /*size_t num_state_pool = state_pool.size();
+        // start pickling checkpoint/restore pools
+        auto state_pool = get_state_pool();
+
+        size_t num_state_pool = state_pool.size();
         write_and_hash(fd, hashctx, &num_state_pool, sizeof(num_state_pool));
         for (const auto &state: state_pool) {
-            uint64_t key=state.first;
+            uint64_t key = state.first;
             write_and_hash(fd, hashctx, &key, sizeof(key));
             std::tuple
-                    <std::vector <Inode *>, std::queue<fuse_ino_t>,
-                    struct statvfs> stored_states=state.second;
-            std::vector <Inode *> stored_files = std::get<0>(stored_states);
+                    <std::vector<Inode *>, std::queue<fuse_ino_t>,
+                            struct statvfs> stored_states = state.second;
+            std::vector<Inode *> stored_files = std::get<0>(stored_states);
             size_t num_stored_files = stored_files.size();
             write_and_hash(fd, hashctx, &num_stored_files, sizeof(num_stored_files));
 
-            for(const auto &stored_file:stored_files){
-                write_and_hash(fd, hashctx, &stored_file, sizeof(stored_file));
+            for (const auto &inode:stored_files) {
+                struct inode_state iinfo = {};
+                if (inode == nullptr) {
+                    iinfo.exist = false;
+                    write_and_hash(fd, hashctx, &iinfo, sizeof(iinfo));
+                    continue;
+                }
+                size_t pickled_size = inode->GetPickledSize();
+                void *data = malloc(pickled_size);
+                if (data == nullptr) {
+                    throw pickle_error(ENOMEM, __func__, __LINE__);
+                }
+                /* Should not fail, because the buffer is preallocated */
+                inode->Pickle(data);
+                iinfo.mode = inode->GetMode();
+                iinfo.exist = true;
+                write_and_hash(fd, hashctx, &iinfo, sizeof(iinfo));
+                write_and_hash(fd, hashctx, data, pickled_size);
+
+                free(data);
             }
 
             std::queue<fuse_ino_t> stored_DeletedInodes = std::get<1>(stored_states);
@@ -151,7 +172,7 @@ int pickle_file_system(int fd, std::vector<Inode *> &inodes,
 
             struct statvfs stored_m_stbuf = std::get<2>(stored_states);
             write_and_hash(fd, hashctx, &stored_m_stbuf, sizeof(stored_m_stbuf));
-        }*/
+        }
 
     } catch (const pickle_error &e) {
         lseek(fd, fpos, SEEK_SET);
@@ -359,6 +380,84 @@ ssize_t load_file_system(const void *data, std::vector<Inode *> &inodes,
             ptr += sizeof(ino);
         }
 
+        // start unpickling checkpoint/restore pools
+        auto state_pool = get_state_pool();
+
+        state_pool.clear();
+        size_t num_state_pool;
+        memcpy(&num_state_pool, ptr, sizeof(num_state_pool));
+        ptr += sizeof(num_state_pool);
+
+        for (size_t i = 0; i < num_state_pool; ++i) {
+            uint64_t key;
+            memcpy(&key, ptr, sizeof(key));
+            ptr += sizeof(key);
+
+            size_t num_stored_files;
+            memcpy(&num_stored_files, ptr, sizeof(num_stored_files));
+            ptr += sizeof(num_stored_files);
+
+            auto cr_inodes = std::vector<Inode *>();
+
+            for (size_t j = 0; j < num_stored_files; ++j) {
+                struct inode_state iinfo;
+                memcpy(&iinfo, ptr, sizeof(iinfo));
+                ptr += sizeof(iinfo);
+                if (!iinfo.exist)
+                    continue;
+
+                size_t res;
+                const void *ptr2 = (const void *) ptr;
+                if (S_ISREG(iinfo.mode)) {
+                    File *file = new File();
+                    res = file->Load(ptr2);
+                    cr_inodes.push_back(file);
+                } else if (S_ISDIR(iinfo.mode)) {
+                    auto *dir = new Directory();
+                    res = dir->Load(ptr2);
+                    cr_inodes.push_back(dir);
+                } else if (S_ISLNK(iinfo.mode)) {
+                    auto *link = new SymLink();
+                    res = link->Load(ptr2);
+                    cr_inodes.push_back(link);
+                } else if (S_ISCHR(iinfo.mode) || S_ISBLK(iinfo.mode) ||
+                           S_ISSOCK(iinfo.mode) || S_ISFIFO(iinfo.mode) || iinfo.mode == 0) {
+                    auto *special = new SpecialInode();
+                    res = special->Load(ptr2);
+                    cr_inodes.push_back(special);
+                } else {
+                    throw pickle_error(EINVAL, __func__, __LINE__);
+                }
+
+                if (res == 0) {
+                    throw pickle_error(ENOMEM, __func__, __LINE__);
+                }
+                ptr += res;
+            }
+
+            auto cr_deleted_inodes = std::queue<fuse_ino_t>();
+            size_t num_stored_DeletedInodes;
+            memcpy(&num_stored_DeletedInodes, ptr, sizeof(num_stored_DeletedInodes));
+            ptr += sizeof(num_stored_DeletedInodes);
+
+            for (size_t j = 0; j < num_stored_DeletedInodes; ++j) {
+                fuse_ino_t ino;
+                memcpy(&ino, ptr, sizeof(ino));
+                ptr += sizeof(ino);
+                cr_deleted_inodes.push(ino);
+            }
+
+            struct statvfs stored_m_stbuf;
+            memcpy(&stored_m_stbuf, ptr, sizeof(stored_m_stbuf));
+            ptr += sizeof(stored_m_stbuf);
+
+            int ret;
+            ret = insert_state(key, std::make_tuple(cr_inodes, cr_deleted_inodes, stored_m_stbuf));
+            if (ret != 0) {
+                throw pickle_error(EINVAL, __func__, __LINE__);
+            }
+        }
+
     } catch (const pickle_error &e) {
         return -e.get_errno();
     }
@@ -404,6 +503,7 @@ int FuseRamFs::load_verifs2(void) {
         if (mapped == MAP_FAILED)
             throw pickle_error(errno, __func__, __LINE__);
         // load the file system
+        clear_states();
         FuseRamFs::Inodes.clear();
         while (!FuseRamFs::DeletedInodes.empty())
             FuseRamFs::DeletedInodes.pop();

@@ -11,41 +11,46 @@ bool isExistInDeleted(fuse_ino_t curr_ino, std::queue<fuse_ino_t> DeletedInodes)
 void print_ino_queue(std::queue<fuse_ino_t> DeletedInodes);
 #endif
 
-std::unordered_map<uint64_t, verifs2_state > state_pool;
+std::unordered_map<uint64_t, verifs2_state> state_pool;
 
-int insert_state(uint64_t key, 
-                  const std::tuple<std::vector <Inode *>, std::queue<fuse_ino_t>,
-                  struct statvfs>& fs_states_vec)
-{
-  auto it = state_pool.find(key);
-  if (it != state_pool.end()) {
-    return -EEXIST;
-  }
-  state_pool.insert({key, fs_states_vec});
+int insert_state(uint64_t key,
+                 const std::tuple<std::vector<Inode *>, std::queue<fuse_ino_t>,
+                         struct statvfs> &fs_states_vec) {
+    auto it = state_pool.find(key);
+    if (it != state_pool.end()) {
+        return -EEXIST;
+    }
+    state_pool.insert({key, fs_states_vec});
 
-  return 0;
+    return 0;
 }
 
-verifs2_state find_state(uint64_t key)
-{
-  auto it = state_pool.find(key);
-  if (it == state_pool.end()) {
-    std::queue<fuse_ino_t> empty_queue;
-    struct statvfs empty_statvfs = {};
-    return verifs2_state{std::vector <Inode *>(), empty_queue, empty_statvfs};
-  } else {
-    return it->second;
-  }
+verifs2_state find_state(uint64_t key) {
+    auto it = state_pool.find(key);
+    if (it == state_pool.end()) {
+        std::queue<fuse_ino_t> empty_queue;
+        struct statvfs empty_statvfs = {};
+        return verifs2_state{std::vector<Inode *>(), empty_queue, empty_statvfs};
+    } else {
+        return it->second;
+    }
 }
 
-int remove_state(uint64_t key)
-{
-  auto it = state_pool.find(key);
-  if (it == state_pool.end()) {
-    return -ENOENT;
-  }
-  state_pool.erase(it);
-  return 0;
+int remove_state(uint64_t key) {
+    auto it = state_pool.find(key);
+    if (it == state_pool.end()) {
+        return -ENOENT;
+    }
+    state_pool.erase(it);
+    return 0;
+}
+
+std::unordered_map<uint64_t, verifs2_state> get_state_pool() {
+    return state_pool;
+}
+
+void clear_states() {
+    state_pool.clear();
 }
 
 #ifdef DUMP_TESTING

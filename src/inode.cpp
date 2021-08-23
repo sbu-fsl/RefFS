@@ -365,6 +365,8 @@ size_t Inode::Load(const void *&buf) {
     size_t n_xattrs;
     memcpy(&n_xattrs, ptr, sizeof(n_xattrs));
     ptr += sizeof(n_xattrs);
+
+    m_xattr.clear();
     // load xattrs
     for (size_t i = 0; i < n_xattrs; ++i) {
         // key
