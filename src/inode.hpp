@@ -60,11 +60,11 @@ public:
     virtual int ReplyAccess(fuse_req_t req, int mask, gid_t gid, uid_t uid);
     
     /* Atomic file attribute operations */
-    void AddHardLink() {
+    void IncrementLinkCount() {
         std::unique_lock<std::shared_mutex> lk(entryRwSem);
         m_fuseEntryParam.attr.st_nlink++;
     }
-    void RemoveHardLink() {
+    void DecrementLinkCount() {
         std::unique_lock<std::shared_mutex> lk(entryRwSem);
         m_fuseEntryParam.attr.st_nlink--;
     }

@@ -882,7 +882,7 @@ long FuseRamFs::do_create_node(Directory *parent, const char *name, mode_t mode,
     }
     /* Only add hard link to the parent dir if everything above succeeded */
     if (S_ISDIR(mode)) {
-        parent->AddHardLink();
+        parent->IncrementLinkCount();
     }
     return ino;
 }
@@ -965,7 +965,7 @@ void FuseRamFs::FuseUnlink(fuse_req_t req, fuse_ino_t parent, const char *name) 
     assert(inode_p);
 
     // Update the number of hardlinks in the target
-    inode_p->RemoveHardLink();
+    inode_p->DecrementLinkCount();
 
     // Reply with no error. TODO: Where is ESUCCESS?
     fuse_reply_err(req, 0);
@@ -1029,13 +1029,13 @@ void FuseRamFs::FuseRmdir(fuse_req_t req, fuse_ino_t parent, const char *name) {
 
     parentDir_p->RemoveChild(name);
     // Update the number of hardlinks in the parent dir
-    parentDir_p->RemoveHardLink();
+    parentDir_p->DecrementLinkCount();
 
     // Remove the hard links to this dir so it can be cleaned up later
     // TODO: What if there's a real hardlink to this dir? Hardlinks to dirs allowed?
     // NOTE: No, hardlinks to dirs are not allowed. 
     while (!dir_p->HasNoLinks()) {
-        dir_p->RemoveHardLink();
+        dir_p->DecrementLinkCount();
     }
 
     // Reply with no error. 
@@ -1214,13 +1214,13 @@ FuseRamFs::FuseRename(fuse_req_t req, fuse_ino_t parent, const char *name, fuse_
         //fuse_reply_err(req, ENOENT);
         //return;
         if (S_ISDIR(existingInode->GetMode())) {
-            existingInode->RemoveHardLink();
+            existingInode->DecrementLinkCount();
             /* An empty dir has two hard links
              * so we need to decrement one more time */
-            existingInode->RemoveHardLink();
+            existingInode->DecrementLinkCount();
             /* Decrement one link for the old parent because the source
              * dir has been moved out */
-            parentDir->RemoveHardLink();
+            parentDir->DecrementLinkCount();
         }
         fuse_reply_err(req, 0);
     } else {
@@ -1230,9 +1230,9 @@ FuseRamFs::FuseRename(fuse_req_t req, fuse_ino_t parent, const char *name, fuse_
         if (S_ISDIR(srcInode->GetMode())) {
             /* Decrement one link for the old parent because the source
              * dir has been moved out */
-            parentDir->RemoveHardLink();
+            parentDir->DecrementLinkCount();
             /* Increment one link for the new parent because of moving in */
-            newParentDir->AddHardLink();
+            newParentDir->IncrementLinkCount();
         }
         fuse_reply_err(req, 0);
     }
@@ -1279,7 +1279,7 @@ void FuseRamFs::FuseLink(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent, c
     }
 
     // Update the number of hardlinks in the target
-    src->AddHardLink();
+    src->IncrementLinkCount();
 
     parent->ReplyEntry(req);
 }
