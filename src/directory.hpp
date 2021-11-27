@@ -28,6 +28,7 @@ public:
 
     static std::unordered_map<off_t, Directory::ReadDirCtx *> readdirStates;
     ReadDirCtx* PrepareReaddir(off_t cookie);
+    void RecycleStates();
     friend class FuseRamFs;
 public:
     ~Directory() {}

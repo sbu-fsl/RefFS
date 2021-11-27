@@ -146,18 +146,16 @@ int Directory::ReadAndReply(fuse_req_t req, size_t size, off_t off) {
     return fuse_reply_err(req, EISDIR);
 }
 
+/* The cookie uses 32 bits, with the higher 16 bit the key to the readdir
+ * context, and the lower 16 bit representing the index of the directory entry.
+ */
 Directory::ReadDirCtx* Directory::PrepareReaddir(off_t cookie) {
+    off_t key = 0;
     if (cookie != 0) {
         /* NOTE: Will throw std::out_of_range if no entry is found */
-        Directory::ReadDirCtx* ctx = readdirStates.at(cookie);
+        key = (cookie & 0xffff0000) >> 16;
+        Directory::ReadDirCtx* ctx = readdirStates.at(key);
 
-        /* If we have reached the end of the iterator, we should destroy this context 
-         * to release memory */
-        if (ctx->it == ctx->children.end()) {
-            Directory::readdirStates.erase(cookie);
-            delete ctx;
-            throw(std::out_of_range("Not found"));
-        }
         return ctx;
     }
     /* Make a copy of children */
@@ -166,14 +164,29 @@ Directory::ReadDirCtx* Directory::PrepareReaddir(off_t cookie) {
     lk.unlock();
 
     /* Add it to the table */
-    cookie = rand();
+    key = rand() & 0xffff;
     /* Make sure there is no duplicate */
-    while (readdirStates.find(cookie) != readdirStates.end()) {
-        cookie = rand();
+    while (readdirStates.find(key) != readdirStates.end()) {
+      key = rand() & 0xffff;
     }
+    cookie = 0;
+    cookie = key << 16;
     ReadDirCtx *newctx = new ReadDirCtx(cookie, copiedChildren);
-    readdirStates.insert({cookie, newctx});
+    readdirStates.insert({key, newctx});
     return newctx;
+}
+
+void Directory::RecycleStates() {
+  // find context objects whose iterators have reached the end, and free them
+  for (auto ctxiter = readdirStates.begin(); ctxiter != readdirStates.end();) {
+    Directory::ReadDirCtx *ctx = ctxiter->second;
+    if (ctx->it == ctx->children.end()) {
+      delete ctx;
+      ctxiter = readdirStates.erase(ctxiter);
+    } else {
+      ++ctxiter;
+    }
+  }
 }
 
 bool Directory::IsEmpty() {
