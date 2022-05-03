@@ -5,7 +5,7 @@ add_custom_command(OUTPUT fuse-cpp-ramfs.ps
 add_custom_target(postscript ALL
                   DEPENDS fuse-cpp-ramfs.ps)
 
-# Set GROFF_NO_SGR because the following txt rule running ul is incompatible with the 
+# Set GROFF_NO_SGR because the following txt rule running ul is incompatible with the
 # default.
 add_custom_command(OUTPUT fuse-cpp-ramfs.1
                    COMMAND export GROFF_NO_SGR=1 && groff -e -T ascii -man ${CMAKE_CURRENT_SOURCE_DIR}/fuse-cpp-ramfs.man > fuse-cpp-ramfs.1
@@ -21,14 +21,6 @@ add_custom_command(OUTPUT fuse-cpp-ramfs.txt
 add_custom_target(txt ALL
                   DEPENDS fuse-cpp-ramfs.txt)
 
-add_custom_command(OUTPUT fuse-cpp-ramfs.pdf
-                   COMMAND ps2pdf fuse-cpp-ramfs.ps > fuse-cpp-ramfs.pdf
-                   DEPENDS fuse-cpp-ramfs.ps
-                   COMMENT "Creating pdf file")
-add_custom_target(pdf ALL
-                  DEPENDS fuse-cpp-ramfs.pdf)
-
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/fuse-cpp-ramfs.ps" DESTINATION "${DOCDIR}")
 install(FILES fuse-cpp-ramfs.man DESTINATION "${MANDIR}/man1" RENAME fuse-cpp-ramfs.1)
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/fuse-cpp-ramfs.txt" DESTINATION "${DOCDIR}")
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/fuse-cpp-ramfs.pdf" DESTINATION "${DOCDIR}")

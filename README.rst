@@ -11,12 +11,14 @@ Quick Run
 =========
 ::
 
+	mkdir build
 	cd build
 	cmake ../src
 	make
-	make install
-
-
+	sudo make install
+    sudo mkdir /mnt/test-verifs2
+    sudo mount -t fuse.fuse-cpp-ramfs verifs2 /mnt/test-verifs2
+    
 Requirements
 ============
 fuse-cpp-ramfs builds with CMake version 3.0 or greater.

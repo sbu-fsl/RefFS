@@ -32,4 +32,13 @@ target_link_libraries(ckpt pthread)
 target_link_libraries(restore pthread)
 target_link_libraries(pkl mcfs)
 target_link_libraries(load mcfs)
+add_custom_command(
+    OUTPUT ${CMAKE_BINARY_DIR}/mount.fuse.fuse-cpp-ramfs
+    COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/create-mount-helper.sh
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+add_custom_target(
+    mount-helper ALL
+    DEPENDS fuse-cpp-ramfs ${CMAKE_BINARY_DIR}/mount.fuse.fuse-cpp-ramfs)
 install(TARGETS fuse-cpp-ramfs DESTINATION bin)
+install(PROGRAMS ${CMAKE_BINARY_DIR}/mount.fuse.fuse-cpp-ramfs DESTINATION /sbin)
+
