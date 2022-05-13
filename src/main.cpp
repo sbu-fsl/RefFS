@@ -10,10 +10,10 @@
 using namespace std;
 
 char **copy_args(int argc, const char * argv[]) {
-    char **new_argv = new char*[argc];
+    char **new_argv = (char **)malloc(sizeof(char *)*argc);
     for (int i = 0; i < argc; ++i) {
         int len = (int) strlen(argv[i]) + 1;
-        new_argv[i] = new char[len];
+        new_argv[i] = (char *)malloc(len);
         strncpy(new_argv[i], argv[i], len);
     }
     return new_argv;
@@ -21,9 +21,9 @@ char **copy_args(int argc, const char * argv[]) {
 
 void delete_args(int argc, char **argv) {
     for (int i = 0; i < argc; ++i) {
-        delete argv[i];
+        delete[] argv[i];
     }
-    delete argv;
+    delete[] argv;
 }
 
 struct fuse_chan *ch;
@@ -68,11 +68,12 @@ int main(int argc, const char * argv[]) {
                 fuse_session_destroy(se);
             }
             fuse_unmount(mountpoint, ch);
+            delete[] mountpoint;
         }
     }
     fuse_opt_free_args(&args);
     
-    delete_args(argc, fuse_argv);
+    //delete_args(argc, fuse_argv);
     
     return err ? 1 : 0;
 }

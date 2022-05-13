@@ -171,6 +171,7 @@ void ramfs_set_subtype(struct fuse_args *args, const char *subtype) {
     }
     snprintf(subtype_str, len, "-osubtype=%s", subtype);
     fuse_opt_add_arg(args, subtype_str);
+    delete[] subtype_str;
 }
 
 void erase_arg(struct fuse_args &args, int index) {
@@ -185,7 +186,7 @@ void erase_arg(struct fuse_args &args, int index) {
     args.argv[args.argc - 1] = nullptr;
     args.argc--;
     if (args.allocated) {
-        delete target;
+        free(target);
     }
 }
 /* ramfs_parse_cmdline: Parse command line arguments
@@ -213,7 +214,7 @@ void ramfs_parse_cmdline(struct fuse_args &args, struct fuse_ramfs_options &opti
                 optstr_buf = new char[optlen];
                 strncpy(optstr_buf, args.argv[optind - 1], optlen);
                 options._optstr = ramfs_parse_options(optstr_buf, options);
-                delete optstr_buf;
+                delete[] optstr_buf;
                 /* Mark for erase of -o arg if the output option str is empty */
                 if (strnlen(options._optstr, OPTION_MAX) == 0) {
                     argo_idx = optind - 1;
@@ -223,7 +224,7 @@ void ramfs_parse_cmdline(struct fuse_args &args, struct fuse_ramfs_options &opti
                     }
                 } else {
                     if (args.allocated) {
-                        delete args.argv[optind - 1];
+                        delete[] args.argv[optind - 1];
                     }
                     args.argv[optind - 1] = options._optstr;
                 }
