@@ -46,6 +46,13 @@ int Inode::ReplySetAttr(fuse_req_t req, struct stat *attr, int to_set) {
     }
     if (to_set & FUSE_SET_ATTR_SIZE) {
         m_fuseEntryParam.attr.st_size = attr->st_size;
+#ifdef __APPLE__
+    clock_gettime(CLOCK_REALTIME, &(m_fuseEntryParam.attr.st_ctimespec));
+    m_fuseEntryParam.attr.st_mtimespec = m_fuseEntryParam.attr.st_ctimespec;
+#else
+    clock_gettime(CLOCK_REALTIME, &(m_fuseEntryParam.attr.st_ctim));
+    m_fuseEntryParam.attr.st_mtim = m_fuseEntryParam.attr.st_ctim;
+#endif
     }
     if (to_set & FUSE_SET_ATTR_ATIME) {
 #ifdef __APPLE__

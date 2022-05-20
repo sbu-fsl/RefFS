@@ -68,9 +68,13 @@ public:
         std::unique_lock<std::shared_mutex> lk(entryRwSem);
         m_fuseEntryParam.attr.st_nlink--;
     }
-    bool HasNoLinks() {
+    int NumLinks() {
         std::shared_lock<std::shared_mutex> lk(entryRwSem);
-        return m_fuseEntryParam.attr.st_nlink == 0;
+        return m_fuseEntryParam.attr.st_nlink;
+    }
+    bool IsActive() {
+        std::shared_lock<std::shared_mutex> lk(entryRwSem);
+        return (m_fuseEntryParam.attr.st_nlink + m_nlookup) > 0;
     }
     size_t UsedBlocks() {
         std::shared_lock<std::shared_mutex> lk(entryRwSem);

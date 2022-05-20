@@ -267,6 +267,9 @@ void ramfs_parse_cmdline(struct fuse_args &args, struct fuse_ramfs_options &opti
     if (o_idx1) {
         erase_arg(args, o_idx1);
     }
+    // These two fuse options are required to fix permission related issues.
+    fuse_opt_add_arg(&args, "-odefault_permissions");
+    fuse_opt_add_arg(&args, "-oallow_other");
     printf("Mount name: %s\n", options.subtype);
     printf("Mountpoint path: %s\n", options.mountpoint);
 

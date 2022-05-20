@@ -9,17 +9,17 @@
 
 class Directory : public Inode {
 private:
-    std::map<std::string, fuse_ino_t> m_children;
+    std::vector<std::pair<std::string, fuse_ino_t>> m_children;
     std::shared_mutex childrenRwSem;
 
     void UpdateSize(ssize_t delta);
 public:
     struct ReadDirCtx {
         off_t cookie;
-        std::map<std::string, fuse_ino_t>::iterator it;
-        std::map<std::string, fuse_ino_t> children;
+        std::vector<std::pair<std::string, fuse_ino_t>>::iterator it;
+        std::vector<std::pair<std::string, fuse_ino_t>> children;
         ReadDirCtx() {}
-        ReadDirCtx(off_t ck, std::map<std::string, fuse_ino_t> &ch)
+        ReadDirCtx(off_t ck, std::vector<std::pair<std::string, fuse_ino_t>> &ch)
             : cookie(ck) {
                 children = ch;
                 it = children.begin();
@@ -48,13 +48,14 @@ public:
     int RemoveChild(const std::string &name);
     int WriteAndReply(fuse_req_t req, const char *buf, size_t size, off_t off);
     int ReadAndReply(fuse_req_t req, size_t size, off_t off);
+    std::vector<std::pair<std::string, fuse_ino_t>>::iterator find(const std::string &name);
 
     /* Atomic children operations */
     bool IsEmpty();
    
     /* NOTE: Not guarded, so accuracy is not guaranteed.
      * Mainly intended for readdir() method. */
-    const std::map<std::string, fuse_ino_t> &Children() { return m_children; }
+    const std::vector<std::pair<std::string, fuse_ino_t>> &Children() { return m_children; }
 
     size_t GetPickledSize();
     size_t Pickle(void* &buf);
