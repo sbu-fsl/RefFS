@@ -16,7 +16,7 @@ echo "FUSE_RAMFS_BINDIR=$FUSE_RAMFS_BINDIR" >> $DEST
 echo 'MNT_NAME=$1' >> $DEST
 echo 'MNT_DIR=$2' >> $DEST
 echo 'OPTS=' >> $DEST
-echo 'FUSE_CPP_RAMFS_PROG=$FUSE_RAMFS_BINDIR/src/fuse-cpp-ramfs' >> $DEST
+echo 'FUSE_CPP_RAMFS_PROG=$FUSE_RAMFS_BINDIR/fuse-cpp-ramfs' >> $DEST
 echo 'FUSE_CPP_RAMFS_MOUNT=$FUSE_RAMFS_BINDIR/mnts' >> $DEST
 echo '' >> $DEST
 echo '# If there is options string?' >> $DEST
