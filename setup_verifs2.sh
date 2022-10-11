@@ -23,5 +23,6 @@ if [ -d $MOUNT_POINT ]; then
     sudo rm -rf $MOUNT_POINT;
 fi
 
-sudo mkdir $MOUNT_POINT
+sudo mkdir -p $MOUNT_POINT
 sudo mount -t fuse.fuse-cpp-ramfs $fsname $MOUNT_POINT
+
