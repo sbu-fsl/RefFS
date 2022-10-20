@@ -194,7 +194,7 @@ int Inode::ListXAttrAndReply(fuse_req_t req, size_t size) {
     // TODO: Is EIO really the best error to return if we ran out of memory?
     void *buf = malloc(listSize);
     if (buf == NULL) {
-        return fuse_reply_err(req, EIO);
+        return fuse_reply_err(req, ENOMEM);
     }
 
     size_t position = 0;
