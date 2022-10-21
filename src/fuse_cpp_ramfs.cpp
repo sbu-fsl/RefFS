@@ -492,7 +492,7 @@ void FuseRamFs::FuseSetAttr(fuse_req_t req, fuse_ino_t ino, struct stat *attr, i
     std::shared_lock<std::shared_mutex> lk(crMutex);
     Inode *inode = GetInode(ino);
     /* return enoent if this inode has been deleted */
-    if (inode == nullptr || !inode->IsActive() == 0) {
+    if (inode == nullptr || inode->NumLinks() == 0) {
         fuse_reply_err(req, ENOENT);
         return;
     }
@@ -1008,7 +1008,7 @@ void FuseRamFs::FuseRmdir(fuse_req_t req, fuse_ino_t parent, const char *name) {
     Inode *inode_p = GetInode(ino);
     // TODO: Any way we can fail here? What if the inode doesn't exist? That probably indicates
     // a problem that happened earlier.
-    if (inode_p == nullptr || (inode_p->NumLinks() > 0)) {
+    if (inode_p == nullptr || (inode_p->NumLinks() == 0)) {
         fuse_reply_err(req, ENOENT);
         return;
     }
