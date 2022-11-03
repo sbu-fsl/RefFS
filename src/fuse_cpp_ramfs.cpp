@@ -1284,7 +1284,7 @@ void FuseRamFs::FuseLink(fuse_req_t req, fuse_ino_t ino, fuse_ino_t newparent, c
     // Update the number of hardlinks in the target
     src->IncrementLinkCount();
 
-    parent->ReplyEntry(req);
+    src->ReplyEntry(req);
 }
 
 void FuseRamFs::FuseSymlink(fuse_req_t req, const char *link, fuse_ino_t parent, const char *name) {
