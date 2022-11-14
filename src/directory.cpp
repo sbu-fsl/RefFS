@@ -214,7 +214,7 @@ bool Directory::IsEmpty() {
         }
         Inode *entry = FuseRamFs::GetInode(it.second);
         /* Not empty if it has at least one undeleted inode */
-        if (entry && (entry->NumLinks() > 0)) {
+        if (entry && !entry->HasNoLinks()) {
             return false;
         }
     }

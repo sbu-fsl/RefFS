@@ -76,6 +76,10 @@ public:
         std::shared_lock<std::shared_mutex> lk(entryRwSem);
         return (m_fuseEntryParam.attr.st_nlink + m_nlookup) > 0;
     }
+    bool HasNoLinks() {
+        std::shared_lock<std::shared_mutex> lk(entryRwSem);
+        return m_fuseEntryParam.attr.st_nlink == 0;
+    }
     size_t UsedBlocks() {
         std::shared_lock<std::shared_mutex> lk(entryRwSem);
         return m_fuseEntryParam.attr.st_blocks;
