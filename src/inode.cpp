@@ -108,12 +108,12 @@ void Inode::Forget(fuse_req_t req, unsigned long nlookup) {
 int Inode::SetXAttrAndReply(fuse_req_t req, const string &name, const void *value, size_t size, int flags,
                             uint32_t position) {
     std::unique_lock<std::shared_mutex> lk(xattrRwSem);
-    if (m_xattr.find(name) == m_xattr.end()) {
+    if (m_xattr.find(name) != m_xattr.end()) {
         if (flags & XATTR_CREATE) {
             return fuse_reply_err(req, EEXIST);
         }
-
-    } else {
+    }
+    else {
         if (flags & XATTR_REPLACE) {
 #ifdef __APPLE__
             return fuse_reply_err(req, ENOATTR);
