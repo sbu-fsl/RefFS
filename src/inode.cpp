@@ -164,13 +164,12 @@ int Inode::GetXAttrAndReply(fuse_req_t req, const string &name, size_t size, uin
     // TODO: What about overflow with size + position?
     size_t newExtent = size + position;
 
-    // TODO: Is this the case where "the size is to small for the value"?
-    if (m_xattr[name].second < newExtent) {
+    // Fail if the no. of bytes to be read is greater than the avaiable bytes.
+    if (m_xattr[name].second > newExtent) {
         return fuse_reply_err(req, ERANGE);
     }
 
-    // TODO: It's fine for someone to just read part of a value, right (i.e. size is less than m_xattr[name].second)?
-    return fuse_reply_buf(req, (char *) m_xattr[name].first + position, size);
+    return fuse_reply_buf(req, (char *) m_xattr[name].first + position, m_xattr[name].second);
 }
 
 int Inode::ListXAttrAndReply(fuse_req_t req, size_t size) {
