@@ -3,6 +3,7 @@
 #include <mcfs/errnoname.h>
 #include <exception>
 #include <openssl/sha.h>
+#include <openssl/evp.h>
 #include <sys/mman.h>
 
 #include "inode.hpp"
@@ -51,10 +52,14 @@ struct inode_state {
     mode_t mode;
 };
 
-static void feed_hash(SHA256_CTX *hashctx, const void *data, size_t len) {
+static void feed_hash(SHA256_CTX *hashctx, EVP_MD_CTX *ctx, const void *data, size_t len) {
     if (hashctx == nullptr)
         return;
-    int ret = SHA256_Update(hashctx, data, len);
+    #if OPENSSL_VERSION_NUMBER >= 0x30000000L
+    	int ret = EVP_DigestUpdate(ctx, data, len);
+    #else 
+	int ret = SHA256_Update(hashctx, data, len);
+    #endif
     if (ret == 0)
         throw pickle_error(EPROTO, __func__, __LINE__);
 }
@@ -68,31 +73,31 @@ static size_t write_to_file(int fd, const void *buf, size_t count) {
     return res;
 }
 
-static inline size_t write_and_hash(int fd, SHA256_CTX *hashctx,
+static inline size_t write_and_hash(int fd, SHA256_CTX *hashctx, EVP_MD_CTX *ctx,
                                     const void *data, size_t count) {
     size_t res = write_to_file(fd, data, count);
-    feed_hash(hashctx, data, count);
+    feed_hash(hashctx, ctx, data, count);
     return res;
 }
 
 int pickle_file_system(int fd, std::vector<Inode *> &inodes,
                        std::queue<fuse_ino_t> &pending_delete_inodes,
-                       struct statvfs &fs_stat, SHA256_CTX *hashctx) {
+                       struct statvfs &fs_stat, SHA256_CTX *hashctx, EVP_MD_CTX *ctx) {
     /* Remember the current file cursor;
      * if pickling fails, move the cursor here. */
     off_t fpos = lseek(fd, 0, SEEK_CUR);
     try {
         // pickle statvfs
-        write_and_hash(fd, hashctx, &fs_stat, sizeof(fs_stat));
+        write_and_hash(fd, hashctx, ctx, &fs_stat, sizeof(fs_stat));
         // pickle inodes
         size_t num_inodes = inodes.size();
-        write_and_hash(fd, hashctx, &num_inodes, sizeof(num_inodes));
+        write_and_hash(fd, hashctx, ctx, &num_inodes, sizeof(num_inodes));
         for (size_t i = 0; i < num_inodes; ++i) {
             Inode *inode = inodes[i];
             struct inode_state iinfo = {};
             if (inode == nullptr) {
                 iinfo.exist = false;
-                write_and_hash(fd, hashctx, &iinfo, sizeof(iinfo));
+                write_and_hash(fd, hashctx, ctx, &iinfo, sizeof(iinfo));
                 continue;
             }
             size_t pickled_size = inode->GetPickledSize();
@@ -104,20 +109,20 @@ int pickle_file_system(int fd, std::vector<Inode *> &inodes,
             inode->Pickle(data);
             iinfo.mode = inode->GetMode();
             iinfo.exist = true;
-            write_and_hash(fd, hashctx, &iinfo, sizeof(iinfo));
-            write_and_hash(fd, hashctx, data, pickled_size);
+            write_and_hash(fd, hashctx, ctx, &iinfo, sizeof(iinfo));
+            write_and_hash(fd, hashctx, ctx, data, pickled_size);
 
             free(data);
         }
         // pickle the list of pending delete inodes
         size_t num_pending_delete = pending_delete_inodes.size();
-        write_and_hash(fd, hashctx, &num_pending_delete,
+        write_and_hash(fd, hashctx, ctx, &num_pending_delete,
                        sizeof(num_pending_delete));
         /* Note that pending_delete_inodes is a queue, therefore the only way
          * to iterate through it is to pop all the elements in a vector */
         for (size_t i = 0; i < num_pending_delete; ++i) {
             fuse_ino_t ino = pending_delete_inodes.front();
-            write_and_hash(fd, hashctx, &ino, sizeof(ino));
+            write_and_hash(fd, hashctx, ctx, &ino, sizeof(ino));
             pending_delete_inodes.pop();
             pending_delete_inodes.push(ino);
         }
@@ -126,22 +131,22 @@ int pickle_file_system(int fd, std::vector<Inode *> &inodes,
         auto state_pool = get_state_pool();
 
         size_t num_state_pool = state_pool.size();
-        write_and_hash(fd, hashctx, &num_state_pool, sizeof(num_state_pool));
+        write_and_hash(fd, hashctx, ctx, &num_state_pool, sizeof(num_state_pool));
         for (const auto &state: state_pool) {
             uint64_t key = state.first;
-            write_and_hash(fd, hashctx, &key, sizeof(key));
+            write_and_hash(fd, hashctx, ctx, &key, sizeof(key));
             std::tuple
                     <std::vector<Inode *>, std::queue<fuse_ino_t>,
                             struct statvfs> stored_states = state.second;
             std::vector<Inode *> stored_files = std::get<0>(stored_states);
             size_t num_stored_files = stored_files.size();
-            write_and_hash(fd, hashctx, &num_stored_files, sizeof(num_stored_files));
+            write_and_hash(fd, hashctx, ctx, &num_stored_files, sizeof(num_stored_files));
 
             for (const auto &inode:stored_files) {
                 struct inode_state iinfo = {};
                 if (inode == nullptr) {
                     iinfo.exist = false;
-                    write_and_hash(fd, hashctx, &iinfo, sizeof(iinfo));
+                    write_and_hash(fd, hashctx, ctx, &iinfo, sizeof(iinfo));
                     continue;
                 }
                 size_t pickled_size = inode->GetPickledSize();
@@ -153,25 +158,25 @@ int pickle_file_system(int fd, std::vector<Inode *> &inodes,
                 inode->Pickle(data);
                 iinfo.mode = inode->GetMode();
                 iinfo.exist = true;
-                write_and_hash(fd, hashctx, &iinfo, sizeof(iinfo));
-                write_and_hash(fd, hashctx, data, pickled_size);
+                write_and_hash(fd, hashctx, ctx, &iinfo, sizeof(iinfo));
+                write_and_hash(fd, hashctx, ctx, data, pickled_size);
 
                 free(data);
             }
 
             std::queue<fuse_ino_t> stored_DeletedInodes = std::get<1>(stored_states);
             size_t num_stored_DeletedInodes = stored_DeletedInodes.size();
-            write_and_hash(fd, hashctx, &num_stored_DeletedInodes, sizeof(num_stored_DeletedInodes));
+            write_and_hash(fd, hashctx, ctx, &num_stored_DeletedInodes, sizeof(num_stored_DeletedInodes));
 
             for (size_t i = 0; i < num_stored_DeletedInodes; ++i) {
                 fuse_ino_t ino = stored_DeletedInodes.front();
-                write_and_hash(fd, hashctx, &ino, sizeof(ino));
+                write_and_hash(fd, hashctx, ctx, &ino, sizeof(ino));
                 stored_DeletedInodes.pop();
                 stored_DeletedInodes.push(ino);
             }
 
             struct statvfs stored_m_stbuf = std::get<2>(stored_states);
-            write_and_hash(fd, hashctx, &stored_m_stbuf, sizeof(stored_m_stbuf));
+            write_and_hash(fd, hashctx, ctx, &stored_m_stbuf, sizeof(stored_m_stbuf));
         }
 
     } catch (const pickle_error &e) {
@@ -218,18 +223,28 @@ int FuseRamFs::pickle_verifs2(void) {
         if (res < 0)
             throw pickle_error(errno, __func__, __LINE__);
         // pickle the file system data and metadata
-        SHA256_CTX hashctx;
-        SHA256_Init(&hashctx);
+        SHA256_CTX *hashctx; 
+	EVP_MD_CTX *ctx;
+
+	#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+		EVP_DigestInit_ex(ctx, EVP_sha256(), NULL);
+	#else
+        	SHA256_Init(&hashctx);
+	#endif
         res = pickle_file_system(fd, FuseRamFs::Inodes,
                                  FuseRamFs::DeletedInodes,
-                                 FuseRamFs::m_stbuf, &hashctx);
+                                 FuseRamFs::m_stbuf, hashctx, ctx);
         if (res < 0)
             throw pickle_error(errno, __func__, __LINE__);
         // lastly: write the header
         off_t filelen = lseek(fd, 0, SEEK_CUR);
         struct state_file_header header = {0};
         header.fsize = filelen;
-        SHA256_Final(header.hash, &hashctx);
+	#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+		EVP_DigestFinal_ex(ctx, header.hash, NULL);
+	#else
+		SHA256_Final(header.hash, &hashctx);
+	#endif
         res = lseek(fd, 0, SEEK_SET);
         if (res < 0)
             throw pickle_error(errno, __func__, __LINE__);
@@ -261,20 +276,33 @@ static int verify_file_integrity(int fd, unsigned char *expected) {
     const size_t blocksize = 4096;
     unsigned char hashres[SHA256_DIGEST_LENGTH] = {0};
     char buf[blocksize];
-    SHA256_CTX hashctx;
+    SHA256_CTX *hashctx; 
+    EVP_MD_CTX *ctx;
+    #if OPENSSL_VERSION_NUMBER >= 0x30000000L
+	int res = EVP_DigestInit_ex(ctx, EVP_sha256(), NULL);
+    #else
+	int res = SHA256_Init(&hashctx);
+    #endif
 
-    int res = SHA256_Init(&hashctx);
     if (res == 0)
         return -2;
 
     ssize_t readsz;
     while ((readsz = read(fd, buf, blocksize)) > 0) {
-        SHA256_Update(&hashctx, buf, readsz);
+	#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+        	EVP_DigestUpdate(ctx, buf, readsz);
+    	#else
+        	SHA256_Update(&hashctx, buf, readsz);
+    	#endif    
     }
     if (readsz < 0)
         return errno;
 
-    SHA256_Final(hashres, &hashctx);
+    #if OPENSSL_VERSION_NUMBER >= 0x30000000L
+	EVP_DigestFinal_ex(ctx, hashres, NULL);
+    #else
+	SHA256_Final(hashres, &hashctx);
+    #endif
     return (memcmp(hashres, expected, SHA256_DIGEST_LENGTH) == 0) ? 0 : -3;
 }
 
