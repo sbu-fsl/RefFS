@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.2)
+project(VeriFS2)
 # set GDB debug flag (-g) with cmake
 set(CMAKE_BUILD_TYPE Debug)
 # preprocessor for verifying Checkpoint/Restore APIs
