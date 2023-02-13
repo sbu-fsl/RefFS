@@ -52,18 +52,23 @@ struct inode_state {
     mode_t mode;
 };
 
-static void feed_hash(SHA256_CTX *hashctx, EVP_MD_CTX *ctx, const void *data, size_t len) {
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+static void feed_hash(EVP_MD_CTX *hashctx, const void *data, size_t len) {
     if (hashctx == nullptr)
         return;
-    #if OPENSSL_VERSION_NUMBER >= 0x30000000L
-    	int ret = EVP_DigestUpdate(ctx, data, len);
-    #else 
-	int ret = SHA256_Update(hashctx, data, len);
-    #endif
+    int ret = EVP_DigestUpdate(hashctx, data, len);
     if (ret == 0)
         throw pickle_error(EPROTO, __func__, __LINE__);
 }
-
+#else
+static void feed_hash(SHA256_CTX *hashctx, const void *data, size_t len) {
+    if (hashctx == nullptr)
+        return;
+    int ret = SHA256_Update(hashctx, data, len);
+    if (ret == 0)
+        throw pickle_error(EPROTO, __func__, __LINE__);
+}
+#endif
 static size_t write_to_file(int fd, const void *buf, size_t count) {
     errno = 0;
     size_t res = write(fd, buf, count);
@@ -76,9 +81,14 @@ static size_t write_to_file(int fd, const void *buf, size_t count) {
 static inline size_t write_and_hash(int fd, SHA256_CTX *hashctx, EVP_MD_CTX *ctx,
                                     const void *data, size_t count) {
     size_t res = write_to_file(fd, data, count);
-    feed_hash(hashctx, ctx, data, count);
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L    
+    feed_hash(ctx, data, count);
+#else
+    feed_hash(hashctx, data, count);
+#endif
     return res;
 }
+
 
 int pickle_file_system(int fd, std::vector<Inode *> &inodes,
                        std::queue<fuse_ino_t> &pending_delete_inodes,
@@ -226,11 +236,11 @@ int FuseRamFs::pickle_verifs2(void) {
         SHA256_CTX *hashctx; 
 	EVP_MD_CTX *ctx;
 
-	#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-		EVP_DigestInit_ex(ctx, EVP_sha256(), NULL);
-	#else
-        	SHA256_Init(&hashctx);
-	#endif
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+	EVP_DigestInit_ex(ctx, EVP_sha256(), NULL);
+#else
+        SHA256_Init(&hashctx);
+#endif
         res = pickle_file_system(fd, FuseRamFs::Inodes,
                                  FuseRamFs::DeletedInodes,
                                  FuseRamFs::m_stbuf, hashctx, ctx);
@@ -240,11 +250,11 @@ int FuseRamFs::pickle_verifs2(void) {
         off_t filelen = lseek(fd, 0, SEEK_CUR);
         struct state_file_header header = {0};
         header.fsize = filelen;
-	#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-		EVP_DigestFinal_ex(ctx, header.hash, NULL);
-	#else
-		SHA256_Final(header.hash, &hashctx);
-	#endif
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+	EVP_DigestFinal_ex(ctx, header.hash, NULL);
+#else
+	SHA256_Final(header.hash, &hashctx);
+#endif
         res = lseek(fd, 0, SEEK_SET);
         if (res < 0)
             throw pickle_error(errno, __func__, __LINE__);
@@ -278,31 +288,31 @@ static int verify_file_integrity(int fd, unsigned char *expected) {
     char buf[blocksize];
     SHA256_CTX *hashctx; 
     EVP_MD_CTX *ctx;
-    #if OPENSSL_VERSION_NUMBER >= 0x30000000L
-	int res = EVP_DigestInit_ex(ctx, EVP_sha256(), NULL);
-    #else
-	int res = SHA256_Init(&hashctx);
-    #endif
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+    int res = EVP_DigestInit_ex(ctx, EVP_sha256(), NULL);
+#else
+    int res = SHA256_Init(&hashctx);
+#endif
 
     if (res == 0)
         return -2;
 
     ssize_t readsz;
     while ((readsz = read(fd, buf, blocksize)) > 0) {
-	#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-        	EVP_DigestUpdate(ctx, buf, readsz);
-    	#else
-        	SHA256_Update(&hashctx, buf, readsz);
-    	#endif    
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+        EVP_DigestUpdate(ctx, buf, readsz);
+#else
+        SHA256_Update(&hashctx, buf, readsz);
+#endif    
     }
     if (readsz < 0)
         return errno;
 
-    #if OPENSSL_VERSION_NUMBER >= 0x30000000L
-	EVP_DigestFinal_ex(ctx, hashres, NULL);
-    #else
-	SHA256_Final(hashres, &hashctx);
-    #endif
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+    EVP_DigestFinal_ex(ctx, hashres, NULL);
+#else
+    SHA256_Final(hashres, &hashctx);
+#endif
     return (memcmp(hashres, expected, SHA256_DIGEST_LENGTH) == 0) ? 0 : -3;
 }
 
