@@ -24,5 +24,7 @@ if [ -d $MOUNT_POINT ]; then
 fi
 
 sudo mkdir -p $MOUNT_POINT
+
+# Ensure that MOUNT_POINT is an empty dir
 sudo mount -t fuse.fuse-cpp-ramfs $fsname $MOUNT_POINT
 
