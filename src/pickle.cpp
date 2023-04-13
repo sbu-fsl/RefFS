@@ -234,10 +234,10 @@ int FuseRamFs::pickle_verifs2(void) {
             throw pickle_error(errno, __func__, __LINE__);
         // pickle the file system data and metadata
         SHA256_CTX *hashctx; 
-	EVP_MD_CTX *ctx;
+	    EVP_MD_CTX *ctx;
 
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
-	EVP_DigestInit_ex(ctx, EVP_sha256(), NULL);
+	    EVP_DigestInit_ex(ctx, EVP_sha256(), NULL);
 #else
         SHA256_Init(&hashctx);
 #endif
@@ -251,9 +251,9 @@ int FuseRamFs::pickle_verifs2(void) {
         struct state_file_header header = {0};
         header.fsize = filelen;
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
-	EVP_DigestFinal_ex(ctx, header.hash, NULL);
+	    EVP_DigestFinal_ex(ctx, header.hash, NULL);
 #else
-	SHA256_Final(header.hash, &hashctx);
+	    SHA256_Final(header.hash, &hashctx);
 #endif
         res = lseek(fd, 0, SEEK_SET);
         if (res < 0)
