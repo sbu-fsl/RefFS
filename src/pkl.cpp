@@ -4,6 +4,8 @@
 #include "common.h"
 #include "cr.h"
 
+// 2023-04-14: VeriFS2 pickle and load only support Ubuntu20 and does not support Ubuntu22 yet
+
 int main(int argc, char **argv) {
     if (argc < 3) {
         fprintf(stderr, "Usage: %s <mountpoint> <output-file>\n", argv[0]);
