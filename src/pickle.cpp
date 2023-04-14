@@ -233,7 +233,7 @@ int FuseRamFs::pickle_verifs2(void) {
         if (res < 0)
             throw pickle_error(errno, __func__, __LINE__);
         // pickle the file system data and metadata
-        SHA256_CTX *hashctx; 
+        SHA256_CTX hashctx; 
 	    EVP_MD_CTX *ctx;
 
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
@@ -243,7 +243,7 @@ int FuseRamFs::pickle_verifs2(void) {
 #endif
         res = pickle_file_system(fd, FuseRamFs::Inodes,
                                  FuseRamFs::DeletedInodes,
-                                 FuseRamFs::m_stbuf, hashctx, ctx);
+                                 FuseRamFs::m_stbuf, &hashctx, ctx);
         if (res < 0)
             throw pickle_error(errno, __func__, __LINE__);
         // lastly: write the header
@@ -251,7 +251,9 @@ int FuseRamFs::pickle_verifs2(void) {
         struct state_file_header header = {0};
         header.fsize = filelen;
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
-	    EVP_DigestFinal_ex(ctx, header.hash, NULL);
+        unsigned int sha256_digest_len = EVP_MD_size(EVP_sha256());
+	    EVP_DigestFinal_ex(ctx, header.hash, &sha256_digest_len);
+        EVP_MD_CTX_free(ctx);
 #else
 	    SHA256_Final(header.hash, &hashctx);
 #endif
@@ -286,12 +288,13 @@ static int verify_file_integrity(int fd, unsigned char *expected) {
     const size_t blocksize = 4096;
     unsigned char hashres[SHA256_DIGEST_LENGTH] = {0};
     char buf[blocksize];
-    SHA256_CTX *hashctx; 
+    SHA256_CTX hashctx; 
     EVP_MD_CTX *ctx;
+    int res = 0;
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
-    int res = EVP_DigestInit_ex(ctx, EVP_sha256(), NULL);
+    res = EVP_DigestInit_ex(ctx, EVP_sha256(), NULL);
 #else
-    int res = SHA256_Init(&hashctx);
+    res = SHA256_Init(&hashctx);
 #endif
 
     if (res == 0)
@@ -309,7 +312,9 @@ static int verify_file_integrity(int fd, unsigned char *expected) {
         return errno;
 
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
-    EVP_DigestFinal_ex(ctx, hashres, NULL);
+    unsigned int sha256_digest_len = EVP_MD_size(EVP_sha256());
+    EVP_DigestFinal_ex(ctx, hashres, &sha256_digest_len);
+    EVP_MD_CTX_free(ctx);
 #else
     SHA256_Final(hashres, &hashctx);
 #endif
