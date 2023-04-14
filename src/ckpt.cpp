@@ -21,7 +21,7 @@ int main(int argc, char **argv)
 
     int dirfd = open(mp, O_RDONLY | __O_DIRECTORY);
     if (dirfd < 0) {
-        fprintf(stderr, "Cannot open %s\n", mp);
+        fprintf(stderr, "Cannot open %s (%s)\n", mp, strerror(errno));
         exit(1);
     }
 
