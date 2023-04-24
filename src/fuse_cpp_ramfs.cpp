@@ -1209,6 +1209,11 @@ FuseRamFs::FuseRename(fuse_req_t req, fuse_ino_t parent, const char *name, fuse_
             return;
         }
 
+        /* For every links/regular files with the same inode number as the 
+         * rename target (new name), their nlink should be decremented by 1.
+         */
+        existingInode->DecrementLinkCount();
+
         //fuse_reply_err(req, ENOENT);
         //return;
         /* Otherwise, let's replace the existing dest */
