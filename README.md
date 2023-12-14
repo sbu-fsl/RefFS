@@ -13,11 +13,12 @@ for details.
 
 ## Requirements
 
-We used and tested RefFS on Ubuntu 20.04 and Ubuntu 22.04.  RefFS builds 
+We used and tested RefFS on Ubuntu 20.04 and Ubuntu 22.04 with Linux kernel version 
+5.4 or greater.  RefFS builds 
 with CMake version 3.0 or greater and requires the libfuse2-2.9 (or later) filesystem-in-userspace 
 library and header files for successful compilation. libfuse is available at: 
-https://github.com/libfuse/libfuse 
-https://osxfuse.github.io
+https://github.com/libfuse/libfuse (for Linux) and
+https://osxfuse.github.io (for Mac)
 
 ## Quick run
 
