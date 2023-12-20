@@ -47,6 +47,35 @@ sudo mkdir -p /mnt/test-verifs2
 sudo mount -t fuse.fuse-cpp-ramfs verifs2 /mnt/test-verifs2
 ```
 
+## Citation 
+
+```
+@INPROCEEDINGS{fast24metis,
+  TITLE =        "{Metis}: File System Model Checking via Versatile Input and State Exploration",
+  AUTHOR =       "Yifei Liu and Manish Adkar and Gerard Holzmann and Geoff Kuenning and Pei Liu and Scott Smolka and Wei Su and Erez Zadok",
+  NOTE =         "To appear",
+  BOOKTITLE =    "Proceedings of the 22nd USENIX Conference on File and Storage Technologies (FAST '24)",
+  ADDRESS =      "Santa Clara, CA",
+  MONTH =        "February",
+  YEAR =         "2024",
+  PUBLISHER =    "USENIX Association"
+}
+```
+
+```
+@INPROCEEDINGS{hotstorage21mcfs,
+  TITLE =        "Model-Checking Support for File System Development",
+  AUTHOR =       "Wei Su and Yifei Liu and Gomathi Ganesan and Gerard Holzmann and Scott Smolka and Erez Zadok and Geoff Kuenning",
+  DOI =          "https://doi.org/10.1145/3465332.3470878",
+  PAGES =        "103--110",
+  BOOKTITLE =    "Proceedings of the 13th ACM Workshop on Hot Topics in Storage (HotStorage '21)",
+  MONTH =        "July",
+  YEAR =         "2021",
+  PUBLISHER =    "ACM",
+  ADDRESS =      "Virtual"
+}
+```
+
 ## Contact 
 For any question, please feel free to contact Yifei Liu ([yifeliu@cs.stonybrook.edu](mailto:yifeliu@cs.stonybrook.edu))
 and Erez Zadok ([ezk@cs.stonybrook.edu](mailto:ezk@cs.stonybrook.edu)).
