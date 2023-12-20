@@ -20,6 +20,8 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "testops.h"
+
 int create_file(const char *path, mode_t mode)
 {
     int fd = creat(path, mode);
