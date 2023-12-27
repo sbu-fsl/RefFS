@@ -57,6 +57,7 @@ int main(int argc, const char * argv[]) {
     struct fuse_args args = {argc, fuse_argv, 1};
     struct fuse_ramfs_options options = {0};
     char *mountpoint;
+    // default error, exit code of any kind of failure
     int err = -1;
 
     std::srand(std::time(nullptr));
