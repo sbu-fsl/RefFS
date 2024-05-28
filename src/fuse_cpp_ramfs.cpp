@@ -1251,7 +1251,8 @@ FuseRamFs::FuseRename(fuse_req_t req, fuse_ino_t parent, const char *name, fuse_
             parentDir->DecrementLinkCount();
         }
         fuse_reply_err(req, 0);
-    } else {
+    } 
+    else {
         /* If the destination does not exist */
         newParentDir->_AddChild(string(newname), srcIno);
         parentDir->_RemoveChild(string(name));

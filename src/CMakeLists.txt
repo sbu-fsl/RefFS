@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.2)
 project(VeriFS2)
 # set GDB debug flag (-g) with cmake
 set(CMAKE_BUILD_TYPE Debug)
+# RefFS Profile: gprof profiling flags
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pg")
+# set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pg")
 # preprocessor for verifying Checkpoint/Restore APIs
 #add_definitions(-DDUMP_TESTING)
 add_executable(fuse-cpp-ramfs main.cpp directory.cpp inode.cpp symlink.cpp file.cpp util.cpp fuse_cpp_ramfs.cpp special_inode.cpp cr_util.cpp pickle.cpp)
@@ -28,6 +31,7 @@ elseif(UNIX) # Linux, BSD etc
   target_link_libraries(ckpt fuse)
   target_link_libraries(restore fuse)
 endif()
+# RefFS Profile: for gperftools, add "tcmalloc profiler" to the link of fuse-cpp-ramfs 
 target_link_libraries(fuse-cpp-ramfs pthread ssl crypto mcfs)
 target_link_libraries(ckpt pthread)
 target_link_libraries(restore pthread)
