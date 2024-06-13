@@ -1173,6 +1173,7 @@ FuseRamFs::FuseRename(fuse_req_t req, fuse_ino_t parent, const char *name, fuse_
     //        fuse_reply_err(req, EACCES);
 
     // Return an error if the source doesn't exist.
+    // Doesn't convert to string more than once, for better perf, save the results if not changed
     fuse_ino_t srcIno = parentDir->ChildInodeNumberWithName(string(name));
     Inode *srcInode = GetInode(srcIno);
     if (srcInode == nullptr || (srcInode->HasNoLinks())) {
@@ -1224,6 +1225,7 @@ FuseRamFs::FuseRename(fuse_req_t req, fuse_ino_t parent, const char *name, fuse_
             }
         }
         /* Vise versa: return EISDIR */
+        // srcInode: naming; different bw srcIno
         if (!S_ISDIR(srcInode->GetMode()) && S_ISDIR(existingInode->GetMode())) {
             fuse_reply_err(req, EISDIR);
             return;
@@ -1237,6 +1239,9 @@ FuseRamFs::FuseRename(fuse_req_t req, fuse_ino_t parent, const char *name, fuse_
         //fuse_reply_err(req, ENOENT);
         //return;
         /* Otherwise, let's replace the existing dest */
+        // Is overwritten inode on the destination free'd?
+        // Does abstract state capture the number of inode? maybe change of inode?
+        // inode leak?
         newParentDir->_UpdateChild(string(newname), srcIno);
         parentDir->_RemoveChild(string(name));
         //fuse_reply_err(req, ENOENT);

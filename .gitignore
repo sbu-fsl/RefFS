@@ -5,3 +5,5 @@ tmp/
 .vscode/
 tests/test_symlink.sh
 abstract_fs_test/
+# gprof profiling output
+*_output.prof*
