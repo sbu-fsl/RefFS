@@ -1,4 +1,4 @@
-# RefFS: a small, fast file system for Metis as a reference with efficient ioctl API
+# RefFS: a small, fast file system for Metis as a reference with efficient ioctl API to save/restore entire FS state
 
 ## Introducation
 
